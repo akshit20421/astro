@@ -181,7 +181,7 @@ test.describe('View Transitions', () => {
 		await expect(p, 'imported CSS updated').toHaveCSS('font-size', '24px');
 	});
 
-	test('astro:load event fires when navigating to new page', async ({ page, astro }) => {
+	test('astro:page-load event fires when navigating to new page', async ({ page, astro }) => {
 		// Go to page 1
 		await page.goto(astro.resolveUrl('/one'));
 		const p = page.locator('#one');
@@ -193,14 +193,17 @@ test.describe('View Transitions', () => {
 		await expect(article, 'should have script content').toHaveText('works');
 	});
 
-	test('astro:load event fires when navigating directly to a page', async ({ page, astro }) => {
+	test('astro:page-load event fires when navigating directly to a page', async ({
+		page,
+		astro,
+	}) => {
 		// Go to page 2
 		await page.goto(astro.resolveUrl('/two'));
 		const article = page.locator('#twoarticle');
 		await expect(article, 'should have script content').toHaveText('works');
 	});
 
-	test('astro:beforeload event fires right before the swap', async ({ page, astro }) => {
+	test('astro:after-swap event fires right after the swap', async ({ page, astro }) => {
 		// Go to page 1
 		await page.goto(astro.resolveUrl('/one'));
 		let p = page.locator('#one');
@@ -396,4 +399,48 @@ test.describe('View Transitions', () => {
 			'There should be only 1 page load. No additional loads for going back on same page'
 		).toEqual(1);
 	});
+});
+
+test('Navigation also swaps the attributes of the document root', async ({ page, astro }) => {
+	page.on('console', (msg) => console.log(msg.text()));
+	await page.goto(astro.resolveUrl('/some-attributes'));
+	let p = page.locator('#heading');
+	await expect(p, 'should have content').toHaveText('Page with some attributes');
+
+	let h = page.locator('html');
+	await expect(h, 'should have content').toHaveAttribute('lang', 'en');
+
+	await page.click('#click-other-attributes');
+	p = page.locator('#heading');
+	await expect(p, 'should have content').toHaveText('Page with other attributes');
+
+	h = page.locator('html');
+	await expect(h, 'should have content').toHaveAttribute('lang', 'es');
+	await expect(h, 'should have content').toHaveAttribute('style', 'background-color: green');
+	await expect(h, 'should have content').toHaveAttribute('data-other-name', 'value');
+	await expect(h, 'should have content').toHaveAttribute('data-astro-fake', 'value');
+	await expect(h, 'should have content').toHaveAttribute('data-astro-transition', 'forward');
+	await expect(h, 'should be absent').not.toHaveAttribute('class', /.*/);
+});
+
+test('Link with data-astro-reload attribute should trigger page load, no tranistion', async ({
+	page,
+	astro,
+}) => {
+	const loads = [];
+	page.addListener('load', (p) => {
+		loads.push(p.title());
+	});
+
+	// Go to page 4
+	await page.goto(astro.resolveUrl('/four'));
+	let p = page.locator('#four');
+	await expect(p, 'should have content').toHaveText('Page 4');
+
+	// go to page 2
+	await page.click('#click-two');
+	p = page.locator('#two');
+	await expect(p, 'should have content').toHaveText('Page 2');
+
+	expect(loads.length, 'There should be 2 page load').toEqual(2);
 });
