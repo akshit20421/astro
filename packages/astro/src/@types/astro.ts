@@ -24,6 +24,8 @@ import type { AstroIntegrationLogger, Logger, LoggerLevel } from '../core/logger
 import type { AstroComponentFactory, AstroComponentInstance } from '../runtime/server';
 import type { SUPPORTED_MARKDOWN_FILE_EXTENSIONS } from './../core/constants.js';
 
+export { type AstroIntegrationLogger };
+
 export type {
 	MarkdownHeading,
 	MarkdownMetadata,
@@ -145,8 +147,9 @@ export interface CLIFlags {
 export interface AstroGlobal<
 	Props extends Record<string, any> = Record<string, any>,
 	Self = AstroComponentFactory,
+	Params extends Record<string, string | undefined> = Record<string, string | undefined>,
 > extends AstroGlobalPartial,
-		AstroSharedContext<Props> {
+		AstroSharedContext<Props, Params> {
 	/**
 	 * A full URL object of the request URL.
 	 * Equivalent to: `new URL(Astro.request.url)`
@@ -172,7 +175,7 @@ export interface AstroGlobal<
 	 *
 	 * [Astro reference](https://docs.astro.build/en/reference/api-reference/#astroparams)
 	 */
-	params: AstroSharedContext['params'];
+	params: AstroSharedContext<Props, Params>['params'];
 	/** List of props passed to this component
 	 *
 	 * A common way to get specific props is through [destructuring](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment), ex:
@@ -182,7 +185,7 @@ export interface AstroGlobal<
 	 *
 	 * [Astro reference](https://docs.astro.build/en/core-concepts/astro-components/#component-props)
 	 */
-	props: AstroSharedContext<Props>['props'];
+	props: AstroSharedContext<Props, Params>['props'];
 	/** Information about the current request. This is a standard [Request](https://developer.mozilla.org/en-US/docs/Web/API/Request) object
 	 *
 	 * For example, to get a URL object of the current URL, you can use:
@@ -1600,7 +1603,9 @@ export type GetStaticPaths = (
  * const { slug } = Astro.params as Params;
  * ```
  */
-export type InferGetStaticParamsType<T> = T extends () => infer R | Promise<infer R>
+export type InferGetStaticParamsType<T> = T extends (
+	opts?: GetStaticPathsOptions
+) => infer R | Promise<infer R>
 	? R extends Array<infer U>
 		? U extends { params: infer P }
 			? P
@@ -1631,7 +1636,9 @@ export type InferGetStaticParamsType<T> = T extends () => infer R | Promise<infe
  * const { propA, propB } = Astro.props;
  * ```
  */
-export type InferGetStaticPropsType<T> = T extends () => infer R | Promise<infer R>
+export type InferGetStaticPropsType<T> = T extends (
+	opts: GetStaticPathsOptions
+) => infer R | Promise<infer R>
 	? R extends Array<infer U>
 		? U extends { props: infer P }
 			? P
@@ -1678,13 +1685,13 @@ export type MarkdownContent<T extends Record<string, any> = Record<string, any>>
  *
  * [Astro reference](https://docs.astro.build/en/reference/api-reference/#paginate)
  */
-export interface PaginateOptions {
+export interface PaginateOptions<PaginateProps extends Props, PaginateParams extends Params> {
 	/** the number of items per-page (default: `10`) */
 	pageSize?: number;
 	/** key: value object of page params (ex: `{ tag: 'javascript' }`) */
-	params?: Params;
+	params?: PaginateParams;
 	/** object of props to forward to `page` result */
-	props?: Props;
+	props?: PaginateProps;
 }
 
 /**
@@ -1718,7 +1725,33 @@ export interface Page<T = any> {
 	};
 }
 
-export type PaginateFunction = (data: any[], args?: PaginateOptions) => GetStaticPathsResult;
+type OmitIndexSignature<ObjectType> = {
+	// eslint-disable-next-line @typescript-eslint/ban-types
+	[KeyType in keyof ObjectType as {} extends Record<KeyType, unknown>
+		? never
+		: KeyType]: ObjectType[KeyType];
+};
+// eslint-disable-next-line @typescript-eslint/ban-types
+type Simplify<T> = { [KeyType in keyof T]: T[KeyType] } & {};
+export type PaginateFunction = <
+	PaginateData,
+	AdditionalPaginateProps extends Props,
+	AdditionalPaginateParams extends Params,
+>(
+	data: PaginateData[],
+	args?: PaginateOptions<AdditionalPaginateProps, AdditionalPaginateParams>
+) => {
+	params: Simplify<
+		{
+			page: string | undefined;
+		} & OmitIndexSignature<AdditionalPaginateParams>
+	>;
+	props: Simplify<
+		{
+			page: Page<PaginateData>;
+		} & OmitIndexSignature<AdditionalPaginateProps>
+	>;
+}[];
 
 export type Params = Record<string, string | undefined>;
 
@@ -1775,7 +1808,10 @@ type Body = string;
 export type ValidRedirectStatus = 300 | 301 | 302 | 303 | 304 | 307 | 308;
 
 // Shared types between `Astro` global and API context object
-interface AstroSharedContext<Props extends Record<string, any> = Record<string, any>> {
+interface AstroSharedContext<
+	Props extends Record<string, any> = Record<string, any>,
+	RouteParams extends Record<string, string | undefined> = Record<string, string | undefined>,
+> {
 	/**
 	 * The address (usually IP address) of the user. Used with SSR only.
 	 */
@@ -1795,7 +1831,7 @@ interface AstroSharedContext<Props extends Record<string, any> = Record<string, 
 	/**
 	 * Route parameters for this request if this is a dynamic route.
 	 */
-	params: Params;
+	params: RouteParams;
 	/**
 	 * List of props returned for this path by `getStaticPaths` (**Static Only**).
 	 */
@@ -1811,8 +1847,10 @@ interface AstroSharedContext<Props extends Record<string, any> = Record<string, 
 	locals: App.Locals;
 }
 
-export interface APIContext<Props extends Record<string, any> = Record<string, any>>
-	extends AstroSharedContext<Props> {
+export interface APIContext<
+	Props extends Record<string, any> = Record<string, any>,
+	APIParams extends Record<string, string | undefined> = Record<string, string | undefined>,
+> extends AstroSharedContext<Props, Params> {
 	site: URL | undefined;
 	generator: string;
 	/**
@@ -1844,7 +1882,7 @@ export interface APIContext<Props extends Record<string, any> = Record<string, a
 	 *
 	 * [context reference](https://docs.astro.build/en/reference/api-reference/#contextparams)
 	 */
-	params: AstroSharedContext['params'];
+	params: AstroSharedContext<Props, APIParams>['params'];
 	/**
 	 * List of props passed from `getStaticPaths`. Only available to static builds.
 	 *
@@ -1867,7 +1905,7 @@ export interface APIContext<Props extends Record<string, any> = Record<string, a
 	 *
 	 * [context reference](https://docs.astro.build/en/guides/api-reference/#contextprops)
 	 */
-	props: AstroSharedContext<Props>['props'];
+	props: AstroSharedContext<Props, APIParams>['props'];
 	/**
 	 * Redirect to another page. Only available in SSR builds.
 	 *
@@ -2173,6 +2211,7 @@ export interface PreviewServerParams {
 	host: string | undefined;
 	port: number;
 	base: string;
+	logger: AstroIntegrationLogger;
 }
 
 export type CreatePreviewServer = (

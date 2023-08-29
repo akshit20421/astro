@@ -1,5 +1,32 @@
 # astro
 
+## 3.0.0-rc.9
+
+### Patch Changes
+
+- [#8234](https://github.com/withastro/astro/pull/8234) [`0c7b42dc6`](https://github.com/withastro/astro/commit/0c7b42dc6780e687e416137539f55a3a427d1d10) Thanks [@natemoo-re](https://github.com/natemoo-re)! - Update telemetry notice
+
+- [#8263](https://github.com/withastro/astro/pull/8263) [`9e021a91c`](https://github.com/withastro/astro/commit/9e021a91c57d10809f588dd47968fc0e7f8b4d5c) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Add a type param to AstroGlobal to type params. This will eventually be used automatically by our tooling to provide typing and completions for `Astro.params`
+
+- [#8264](https://github.com/withastro/astro/pull/8264) [`1f58a7a1b`](https://github.com/withastro/astro/commit/1f58a7a1bea6888868b689dac94801d554319b02) Thanks [@natemoo-re](https://github.com/natemoo-re)! - Fire `astro:unmount` event when island is disconnected
+
+- [#8258](https://github.com/withastro/astro/pull/8258) [`1db4e92c1`](https://github.com/withastro/astro/commit/1db4e92c12ed73681217f5cefd39f2f47542f961) Thanks [@matthewp](https://github.com/matthewp)! - Allow fallback animations on html element
+
+- Updated dependencies [[`0c7b42dc6`](https://github.com/withastro/astro/commit/0c7b42dc6780e687e416137539f55a3a427d1d10)]:
+  - @astrojs/telemetry@3.0.0-rc.4
+
+## 3.0.0-rc.8
+
+### Patch Changes
+
+- [#8251](https://github.com/withastro/astro/pull/8251) [`46c4c0e05`](https://github.com/withastro/astro/commit/46c4c0e053f830585b9ef229ce1c259df00a80f8) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Adds a link to the error reference in the CLI when an error occurs
+
+- [#8253](https://github.com/withastro/astro/pull/8253) [`1048aca55`](https://github.com/withastro/astro/commit/1048aca550769415e528016e42b358ffbfd44b61) Thanks [@matthewp](https://github.com/matthewp)! - Fix, lazily initialize ResponseWithEncoding
+
+- [#8229](https://github.com/withastro/astro/pull/8229) [`ffc9e2d3d`](https://github.com/withastro/astro/commit/ffc9e2d3de46049bf3d82140ef018f524fb03187) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Paginate will now return exact types instead of a naive Record
+
+- [#8237](https://github.com/withastro/astro/pull/8237) [`3674584e0`](https://github.com/withastro/astro/commit/3674584e02b161a698b429ceb66723918fdc56ac) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Fix `astro check` not finding the `@astrojs/check` package
+
 ## 3.0.0-rc.7
 
 ### Patch Changes
