@@ -623,7 +623,7 @@ export interface AstroUserConfig {
 	 *
 	 * Using `'class'` is helpful when you want to ensure that element selectors within an Astro component override global style defaults (e.g. from a global stylesheet).
 	 * Using `'where'` gives you more control over specifity, but requires that you use higher-specifity selectors, layers, and other tools to control which selectors are applied.
-	 * Using 'attribute' is useful when you are manipulating the `class` attribute of elements and need to avoid conflicts between your own styling logic and Astro's application of styles.
+	 * Using `'attribute'` is useful when you are manipulating the `class` attribute of elements and need to avoid conflicts between your own styling logic and Astro's application of styles.
 	 */
 	scopedStyleStrategy?: 'where' | 'class' | 'attribute';
 
@@ -975,7 +975,7 @@ export interface AstroUserConfig {
 	image?: {
 		/**
 		 * @docs
-		 * @name image.service (Experimental)
+		 * @name image.service
 		 * @type {{entrypoint: 'astro/assets/services/sharp' | 'astro/assets/services/squoosh' | string, config: Record<string, any>}}
 		 * @default `{entrypoint: 'astro/assets/services/sharp', config?: {}}`
 		 * @version 2.1.0
@@ -999,14 +999,14 @@ export interface AstroUserConfig {
 
 		/**
 		 * @docs
-		 * @name image.domains (Experimental)
+		 * @name image.domains
 		 * @type {string[]}
 		 * @default `{domains: []}`
 		 * @version 2.10.10
 		 * @description
 		 * Defines a list of permitted image source domains for local image optimization. No other remote images will be optimized by Astro.
 		 *
-		 * This option requires an array of individual domain names as strings. Wildcards are not permitted. Instead, use [`image.remotePatterns`](#imageremotepatterns-experimental) to define a list of allowed source URL patterns.
+		 * This option requires an array of individual domain names as strings. Wildcards are not permitted. Instead, use [`image.remotePatterns`](#imageremotepatterns) to define a list of allowed source URL patterns.
 		 *
 		 * ```js
 		 * // astro.config.mjs
@@ -1022,7 +1022,7 @@ export interface AstroUserConfig {
 
 		/**
 		 * @docs
-		 * @name image.remotePatterns (Experimental)
+		 * @name image.remotePatterns
 		 * @type {RemotePattern[]}
 		 * @default `{remotePatterns: []}`
 		 * @version 2.10.10
