@@ -12,12 +12,20 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
 	getAstroImageConfig,
 	getDefaultImageConfig,
+	type DevImageService,
 	type VercelImageConfig,
 } from '../image/shared.js';
-import { exposeEnv } from '../lib/env.js';
 import { getVercelOutput, removeDir, writeJson } from '../lib/fs.js';
 import { copyDependenciesToFunction } from '../lib/nft.js';
 import { getRedirects } from '../lib/redirects.js';
+import {
+	getSpeedInsightsViteConfig,
+	type VercelSpeedInsightsConfig,
+} from '../lib/speed-insights.js';
+import {
+	getInjectableWebAnalyticsContent,
+	type VercelWebAnalyticsConfig,
+} from '../lib/web-analytics.js';
 import { generateEdgeMiddleware } from './middleware.js';
 
 const PACKAGE_NAME = '@astrojs/vercel/serverless';
@@ -63,22 +71,31 @@ function getAdapter({
 }
 
 export interface VercelServerlessConfig {
+	/**
+	 * @deprecated
+	 */
+	analytics?: boolean;
+	webAnalytics?: VercelWebAnalyticsConfig;
+	speedInsights?: VercelSpeedInsightsConfig;
 	includeFiles?: string[];
 	excludeFiles?: string[];
-	analytics?: boolean;
 	imageService?: boolean;
 	imagesConfig?: VercelImageConfig;
+	devImageService?: DevImageService;
 	edgeMiddleware?: boolean;
 	functionPerRoute?: boolean;
 }
 
 export default function vercelServerless({
+	analytics,
+	webAnalytics,
+	speedInsights,
 	includeFiles,
 	excludeFiles,
-	analytics,
 	imageService,
 	imagesConfig,
-	functionPerRoute = true,
+	devImageService = 'sharp',
+	functionPerRoute = false,
 	edgeMiddleware = false,
 }: VercelServerlessConfig = {}): AstroIntegration {
 	let _config: AstroConfig;
@@ -128,12 +145,25 @@ export default function vercelServerless({
 	return {
 		name: PACKAGE_NAME,
 		hooks: {
-			'astro:config:setup': ({ command, config, updateConfig, injectScript }) => {
-				if (command === 'build' && analytics) {
-					injectScript('page', 'import "@astrojs/vercel/analytics"');
+			'astro:config:setup': async ({ command, config, updateConfig, injectScript, logger }) => {
+				if (webAnalytics?.enabled || analytics) {
+					if (analytics) {
+						logger.warn(
+							`The \`analytics\` property is deprecated. Please use the new \`webAnalytics\` and \`speedInsights\` properties instead.`
+						);
+					}
+
+					injectScript(
+						'head-inline',
+						await getInjectableWebAnalyticsContent({
+							mode: command === 'dev' ? 'development' : 'production',
+						})
+					);
+				}
+				if (command === 'build' && (speedInsights?.enabled || analytics)) {
+					injectScript('page', 'import "@astrojs/vercel/speed-insights"');
 				}
 				const outDir = getVercelOutput(config.root);
-				const viteDefine = exposeEnv(['VERCEL_ANALYTICS_ID']);
 				updateConfig({
 					outDir,
 					build: {
@@ -142,12 +172,18 @@ export default function vercelServerless({
 						server: new URL('./dist/', config.root),
 					},
 					vite: {
-						define: viteDefine,
+						...getSpeedInsightsViteConfig(speedInsights?.enabled || analytics),
 						ssr: {
 							external: ['@vercel/nft'],
 						},
 					},
-					...getAstroImageConfig(imageService, imagesConfig, command, config.image),
+					...getAstroImageConfig(
+						imageService,
+						imagesConfig,
+						command,
+						devImageService,
+						config.image
+					),
 				});
 			},
 			'astro:config:done': ({ setAdapter, config, logger }) => {
