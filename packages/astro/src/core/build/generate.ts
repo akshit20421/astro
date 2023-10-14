@@ -297,7 +297,10 @@ async function generatePage(
 		mod: pageModule,
 	};
 
-	const icon = pageData.route.type === 'page' ? green('▶') : magenta('λ');
+	const icon =
+		pageData.route.type === 'page' || pageData.route.type === 'redirect'
+			? green('▶')
+			: magenta('λ');
 	if (isRelativePath(pageData.route.component)) {
 		logger.info(null, `${icon} ${pageData.route.route}`);
 	} else {
@@ -571,7 +574,9 @@ async function generatePath(pathname: string, gopts: GeneratePathOptions, pipeli
 		if (!pipeline.getConfig().build.redirects) {
 			return;
 		}
-		const location = getRedirectLocationOrThrow(response.headers);
+		const locationSite = getRedirectLocationOrThrow(response.headers);
+		const siteURL = pipeline.getConfig().site;
+		const location = siteURL ? new URL(locationSite, siteURL) : locationSite;
 		const fromPath = new URL(renderContext.request.url).pathname;
 		// A short delay causes Google to interpret the redirect as temporary.
 		// https://developers.google.com/search/docs/crawling-indexing/301-redirects#metarefresh
@@ -589,7 +594,7 @@ async function generatePath(pathname: string, gopts: GeneratePathOptions, pipeli
 		}
 		// A dynamic redirect, set the location so that integrations know about it.
 		if (pageData.route.type !== 'redirect') {
-			pageData.route.redirect = location;
+			pageData.route.redirect = location.toString();
 		}
 	} else {
 		// If there's no body, do nothing

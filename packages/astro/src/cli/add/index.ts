@@ -9,7 +9,12 @@ import ora from 'ora';
 import preferredPM from 'preferred-pm';
 import prompts from 'prompts';
 import type yargs from 'yargs-parser';
-import { loadTSConfig, resolveConfigPath, resolveRoot } from '../../core/config/index.js';
+import {
+	loadTSConfig,
+	resolveConfig,
+	resolveConfigPath,
+	resolveRoot,
+} from '../../core/config/index.js';
 import {
 	defaultTSConfig,
 	presets,
@@ -23,7 +28,7 @@ import { appendForwardSlash } from '../../core/path.js';
 import { apply as applyPolyfill } from '../../core/polyfill.js';
 import { parseNpmName } from '../../core/util.js';
 import { eventCliSession, telemetry } from '../../events/index.js';
-import { createLoggerFromFlags } from '../flags.js';
+import { createLoggerFromFlags, flagsToAstroInlineConfig } from '../flags.js';
 import { generate, parse, t, visit } from './babel.js';
 import { ensureImport } from './imports.js';
 import { wrapDefaultExport } from './wrapper.js';
@@ -45,7 +50,7 @@ const ALIASES = new Map([
 ]);
 const ASTRO_CONFIG_STUB = `import { defineConfig } from 'astro/config';\n\nexport default defineConfig({});`;
 const TAILWIND_CONFIG_STUB = `/** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
 	content: ['./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}'],
 	theme: {
 		extend: {},
@@ -69,7 +74,6 @@ const OFFICIAL_ADAPTER_TO_IMPORT_MAP: Record<string, string> = {
 	vercel: '@astrojs/vercel/serverless',
 	cloudflare: '@astrojs/cloudflare',
 	node: '@astrojs/node',
-	deno: '@astrojs/deno',
 };
 
 // Users might lack access to the global npm registry, this function
@@ -87,7 +91,9 @@ async function getRegistry(): Promise<string> {
 }
 
 export async function add(names: string[], { flags }: AddOptions) {
-	telemetry.record(eventCliSession('add'));
+	const inlineConfig = flagsToAstroInlineConfig(flags);
+	const { userConfig } = await resolveConfig(inlineConfig, 'add');
+	telemetry.record(eventCliSession('add', userConfig));
 	applyPolyfill();
 	if (flags.help || names.length === 0) {
 		printHelp({
@@ -153,7 +159,7 @@ export async function add(names: string[], { flags }: AddOptions) {
 						'./tailwind.config.mjs',
 						'./tailwind.config.js',
 					],
-					defaultConfigFile: './tailwind.config.cjs',
+					defaultConfigFile: './tailwind.config.mjs',
 					defaultConfigContent: TAILWIND_CONFIG_STUB,
 				});
 			}
@@ -842,25 +848,31 @@ async function updateTSConfig(
 		return UpdateResult.none;
 	}
 
-	const inputConfig = loadTSConfig(cwd, false);
-	const configFileName = inputConfig.exists ? inputConfig.path.split('/').pop() : 'tsconfig.json';
+	let inputConfig = await loadTSConfig(cwd);
+	let inputConfigText = '';
 
-	if (inputConfig.reason === 'invalid-config') {
+	if (inputConfig === 'invalid-config' || inputConfig === 'unknown-error') {
 		return UpdateResult.failure;
+	} else if (inputConfig === 'missing-config') {
+		logger.debug('add', "Couldn't find tsconfig.json or jsconfig.json, generating one");
+		inputConfig = {
+			tsconfig: defaultTSConfig,
+			tsconfigFile: path.join(cwd, 'tsconfig.json'),
+			rawConfig: { tsconfig: defaultTSConfig, tsconfigFile: path.join(cwd, 'tsconfig.json') },
+		};
+	} else {
+		inputConfigText = JSON.stringify(inputConfig.rawConfig.tsconfig, null, 2);
 	}
 
-	if (inputConfig.reason === 'not-found') {
-		logger.debug('add', "Couldn't find tsconfig.json or jsconfig.json, generating one");
-	}
+	const configFileName = path.basename(inputConfig.tsconfigFile);
 
 	const outputConfig = updateTSConfigForFramework(
-		inputConfig.exists ? inputConfig.config : defaultTSConfig,
+		inputConfig.rawConfig.tsconfig,
 		firstIntegrationWithTSSettings
 	);
 
-	const input = inputConfig.exists ? JSON.stringify(inputConfig.config, null, 2) : '';
 	const output = JSON.stringify(outputConfig, null, 2);
-	const diff = getDiffContent(input, output);
+	const diff = getDiffContent(inputConfigText, output);
 
 	if (!diff) {
 		return UpdateResult.none;
@@ -900,7 +912,7 @@ async function updateTSConfig(
 	}
 
 	if (await askToContinue({ flags })) {
-		await fs.writeFile(inputConfig?.path ?? path.join(cwd, 'tsconfig.json'), output, {
+		await fs.writeFile(inputConfig.tsconfigFile, output, {
 			encoding: 'utf-8',
 		});
 		logger.debug('add', `Updated ${configFileName} file`);

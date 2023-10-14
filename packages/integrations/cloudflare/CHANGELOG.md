@@ -1,5 +1,132 @@
 # @astrojs/cloudflare
 
+## 7.5.3
+
+### Patch Changes
+
+- [#8782](https://github.com/withastro/astro/pull/8782) [`75781643a`](https://github.com/withastro/astro/commit/75781643a2f53656fc3fde3a7f28cb62db40b015) Thanks [@helloimalastair](https://github.com/helloimalastair)! - fixes `AdvancedRuntime` & `DirectoryRuntime` types to work woth Cloudflare caches
+
+- Updated dependencies [[`2993055be`](https://github.com/withastro/astro/commit/2993055bed2764c31ff4b4f55b81ab6b1ae6b401), [`c4270e476`](https://github.com/withastro/astro/commit/c4270e47681ee2453f3fea07fed7b238645fd6ea), [`bd5aa1cd3`](https://github.com/withastro/astro/commit/bd5aa1cd35ecbd2784f30dd836ff814684fee02b), [`f369fa250`](https://github.com/withastro/astro/commit/f369fa25055a3497ebaf61c88fb0e8af56c73212), [`391729686`](https://github.com/withastro/astro/commit/391729686bcc8404a7dd48c5987ee380daf3200f), [`f999365b8`](https://github.com/withastro/astro/commit/f999365b8248b8b14f3743e68a42d450d06acff3), [`b2ae9ee0c`](https://github.com/withastro/astro/commit/b2ae9ee0c42b11ffc1d3f070d1d5ac881aef84ed), [`0abff97fe`](https://github.com/withastro/astro/commit/0abff97fed3db14be3c75ff9ece3aab67c4ba783), [`3bef32f81`](https://github.com/withastro/astro/commit/3bef32f81c56bc600ca307f1bd40787e23e625a5)]:
+  - astro@3.3.0
+  - @astrojs/underscore-redirects@0.3.1
+
+## 7.5.2
+
+### Patch Changes
+
+- [#8766](https://github.com/withastro/astro/pull/8766) [`054c5c644`](https://github.com/withastro/astro/commit/054c5c6447d79dd4ea7ab6ce0f9ec836abebd211) Thanks [@jadbox](https://github.com/jadbox)! - Adds `cloudflare:sockets` compile support
+
+- [#8788](https://github.com/withastro/astro/pull/8788) [`0ab6bad7d`](https://github.com/withastro/astro/commit/0ab6bad7dffd413c975ab00e545f8bc150f6a92f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Adds support for `node:crypto`
+
+- Updated dependencies [[`160d1cd75`](https://github.com/withastro/astro/commit/160d1cd755e70af1d8ec294d01dd2cb32d60db50), [`30de32436`](https://github.com/withastro/astro/commit/30de324361bc261956eb9fc08fe60a82ff602a9b), [`c4a7ec425`](https://github.com/withastro/astro/commit/c4a7ec4255e7acb9555cb8bb74ea13c5fbb2ac17), [`c24f70d91`](https://github.com/withastro/astro/commit/c24f70d91601dd3a6b5a84f04d61824e775e9b44), [`93b092266`](https://github.com/withastro/astro/commit/93b092266febfad16a48575f8eee12d5910bf071), [`29cdfa024`](https://github.com/withastro/astro/commit/29cdfa024886dd581cb207586f7dfec6966bdd4e), [`eaed844ea`](https://github.com/withastro/astro/commit/eaed844ea8f2f52e0c9caa40bb3ec7377e10595f)]:
+  - astro@3.2.4
+  - @astrojs/underscore-redirects@0.3.1
+
+## 7.5.1
+
+### Patch Changes
+
+- [#8737](https://github.com/withastro/astro/pull/8737) [`6f60da805`](https://github.com/withastro/astro/commit/6f60da805e0014bc50dd07bef972e91c73560c3c) Thanks [@ematipico](https://github.com/ematipico)! - Add provenance statement when publishing the library from CI
+
+- Updated dependencies [[`6f60da805`](https://github.com/withastro/astro/commit/6f60da805e0014bc50dd07bef972e91c73560c3c), [`d78806dfe`](https://github.com/withastro/astro/commit/d78806dfe0301ea7ffe6c7c1f783bd415ac7cda9), [`d1c75fe15`](https://github.com/withastro/astro/commit/d1c75fe158839699c59728cf3a83888e8c72a459), [`aa265d730`](https://github.com/withastro/astro/commit/aa265d73024422967c1b1c68ad268c419c6c798f), [`78adbc443`](https://github.com/withastro/astro/commit/78adbc4433208458291e36713909762e148e1e5d), [`21e0757ea`](https://github.com/withastro/astro/commit/21e0757ea22a57d344c934045ca19db93b684436), [`357270f2a`](https://github.com/withastro/astro/commit/357270f2a3d0bf2aa634ba7e52e9d17618eff4a7)]:
+  - @astrojs/underscore-redirects@0.3.1
+  - astro@3.2.3
+
+## 7.5.0
+
+### Minor Changes
+
+- [#8655](https://github.com/withastro/astro/pull/8655) [`3dd65bf88`](https://github.com/withastro/astro/commit/3dd65bf8895faedfa4c92599961acca07457c62f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Introduces support for local KV bindings. Enhances development experience by allowing direct integration with `astro dev`.
+
+- [#8655](https://github.com/withastro/astro/pull/8655) [`3dd65bf88`](https://github.com/withastro/astro/commit/3dd65bf8895faedfa4c92599961acca07457c62f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Introduces support for local Durable Objects bindings. Enhances development experience by allowing direct integration with `astro dev`.
+
+- [#8655](https://github.com/withastro/astro/pull/8655) [`3dd65bf88`](https://github.com/withastro/astro/commit/3dd65bf8895faedfa4c92599961acca07457c62f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Introduces support for local D1 bindings. Enhances development experience by allowing direct integration with `astro dev`.
+
+- [#8655](https://github.com/withastro/astro/pull/8655) [`3dd65bf88`](https://github.com/withastro/astro/commit/3dd65bf8895faedfa4c92599961acca07457c62f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Introduces support for local R2 bindings. Enhances development experience by allowing direct integration with `astro dev`.
+
+- [#8655](https://github.com/withastro/astro/pull/8655) [`3dd65bf88`](https://github.com/withastro/astro/commit/3dd65bf8895faedfa4c92599961acca07457c62f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Introduces support for local Caches bindings. Enhances development experience by allowing direct integration with `astro dev`.
+
+### Patch Changes
+
+- Updated dependencies [[`455af3235`](https://github.com/withastro/astro/commit/455af3235b3268852e6988accecc796f03f6d16e), [`4c2bec681`](https://github.com/withastro/astro/commit/4c2bec681b0752e7215b8a32bd2d44bf477adac1)]:
+  - astro@3.2.2
+  - @astrojs/underscore-redirects@0.3.0
+
+## 7.4.0
+
+### Minor Changes
+
+- [#8682](https://github.com/withastro/astro/pull/8682) [`c3572fd5e`](https://github.com/withastro/astro/commit/c3572fd5e0e3864cd728f83502a52e9274793ee2) Thanks [@dario-piotrowicz](https://github.com/dario-piotrowicz)! - Change build target from `es2020` to `es2022`, for better support
+
+### Patch Changes
+
+- Updated dependencies [[`31c59ad8b`](https://github.com/withastro/astro/commit/31c59ad8b6a72f95c98a306ecf92d198c03110b4), [`47ea310f0`](https://github.com/withastro/astro/commit/47ea310f01d06ed1562c790bec348718a2fa8277), [`345808170`](https://github.com/withastro/astro/commit/345808170fce783ddd3c9a4035a91fa64dcc5f46)]:
+  - astro@3.2.1
+  - @astrojs/underscore-redirects@0.3.0
+
+## 7.3.1
+
+### Patch Changes
+
+- [#7776](https://github.com/withastro/astro/pull/7776) [`f5c617e3a`](https://github.com/withastro/astro/commit/f5c617e3a3ed8f010ff28f0cfe0f322ad54ed6e0) Thanks [@aditsachde](https://github.com/aditsachde)! - Include generated files starting with a dot in \_routes.json
+
+- [#8654](https://github.com/withastro/astro/pull/8654) [`f6ba533df`](https://github.com/withastro/astro/commit/f6ba533df6861e09d39a29f6ef7a80271bbc8d0a) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Refactor codebase to enhance code readability and structure, to prioritize maintainability for long-term.
+
+- Updated dependencies [[`2167ffd72`](https://github.com/withastro/astro/commit/2167ffd72f58904f449ffc6e53581a2d8faf7317), [`408b50c5e`](https://github.com/withastro/astro/commit/408b50c5ea5aba66252424f54788557274a58571), [`2167ffd72`](https://github.com/withastro/astro/commit/2167ffd72f58904f449ffc6e53581a2d8faf7317), [`2167ffd72`](https://github.com/withastro/astro/commit/2167ffd72f58904f449ffc6e53581a2d8faf7317), [`2167ffd72`](https://github.com/withastro/astro/commit/2167ffd72f58904f449ffc6e53581a2d8faf7317), [`e797b6816`](https://github.com/withastro/astro/commit/e797b6816072f63f38d9a91dd2a66765c558d46c), [`824dd4670`](https://github.com/withastro/astro/commit/824dd4670a145c47337eff84a5ae412bf7443117), [`2167ffd72`](https://github.com/withastro/astro/commit/2167ffd72f58904f449ffc6e53581a2d8faf7317), [`cfd895d87`](https://github.com/withastro/astro/commit/cfd895d877fdb7fc69e745665a374fc32cb3ef7d)]:
+  - astro@3.2.0
+  - @astrojs/underscore-redirects@0.3.0
+
+## 7.3.0
+
+### Minor Changes
+
+- [#8459](https://github.com/withastro/astro/pull/8459) [`2365c1246`](https://github.com/withastro/astro/commit/2365c124645d5067a12987f205cee23a45d1d13d) Thanks [@schummar](https://github.com/schummar)! - Adds three new config options for `_routes.json` generation: `routes.strategy`, `routes.include`, and `routes.exclude`.
+
+- [#8542](https://github.com/withastro/astro/pull/8542) [`faeead423`](https://github.com/withastro/astro/commit/faeead42325f378f9edac4e081eb7d6d50905136) Thanks [@adrianlyjak](https://github.com/adrianlyjak)! - Add support for loading wasm modules in the cloudflare adapter
+
+### Patch Changes
+
+- Updated dependencies [[`863f5171e`](https://github.com/withastro/astro/commit/863f5171e8e7516c9d72f2e48ea7db1dea71c4f5), [`63141f3f3`](https://github.com/withastro/astro/commit/63141f3f3e4a57d2f55ccfebd7e506ea1033a1ab), [`974d5117a`](https://github.com/withastro/astro/commit/974d5117abc8b47f8225e455b9285c88e305272f), [`cb838b84b`](https://github.com/withastro/astro/commit/cb838b84b457041b0442996f7611b04aa940a620), [`f36c4295b`](https://github.com/withastro/astro/commit/f36c4295be1ef2bcfa4aecb3c59551388419c53d), [`4c4ad9d16`](https://github.com/withastro/astro/commit/4c4ad9d167e8d15ff2c15e3336ede8ca22f646b2)]:
+  - astro@3.1.3
+  - @astrojs/underscore-redirects@0.3.0
+
+## 7.2.0
+
+### Minor Changes
+
+- [#8595](https://github.com/withastro/astro/pull/8595) [`5b0b3c9a8`](https://github.com/withastro/astro/commit/5b0b3c9a8e0c0e6b6c7472b82008ab57985f2a04) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Add support for the following Node.js Runtime APIs, which are availabe in [Cloudflare](https://developers.cloudflare.com/workers/runtime-apis/nodejs) using the `node:` syntax.
+
+  - assert
+  - AsyncLocalStorage
+  - Buffer
+  - Diagnostics Channel
+  - EventEmitter
+  - path
+  - process
+  - Streams
+  - StringDecoder
+  - util
+
+  ```js
+  import { Buffer } from 'node:buffer';
+  ```
+
+### Patch Changes
+
+- Updated dependencies [[`bcad715ce`](https://github.com/withastro/astro/commit/bcad715ce67bc73a7927c941d1e7f02a82d638c2), [`bdd267d08`](https://github.com/withastro/astro/commit/bdd267d08937611984d074a2872af11ecf3e1a12), [`e522a5eb4`](https://github.com/withastro/astro/commit/e522a5eb41c7df1e62c307c84cd14d53777439ff), [`ed54d4644`](https://github.com/withastro/astro/commit/ed54d46449accc99ad117d6b0d50a8905e4d65d7), [`70f2a8003`](https://github.com/withastro/astro/commit/70f2a80039d232731f63ea735e896997ec0eac7a), [`4398e9298`](https://github.com/withastro/astro/commit/4398e929877dfadd2067af28413284afdfde9d8b), [`8f8b9069d`](https://github.com/withastro/astro/commit/8f8b9069ddd21cf57d37955ab3a92710492226f5), [`5a988eaf6`](https://github.com/withastro/astro/commit/5a988eaf609ddc1b9609acb0cdc2dda43d10a5c2)]:
+  - astro@3.1.2
+  - @astrojs/underscore-redirects@0.3.0
+
+## 7.1.1
+
+### Patch Changes
+
+- [#8560](https://github.com/withastro/astro/pull/8560) [`3da5d8404`](https://github.com/withastro/astro/commit/3da5d8404e56a05da93f6b0a70841acda5ca1a8f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - add the option to type environment variables using a generic
+
+- Updated dependencies [[`8d361169b`](https://github.com/withastro/astro/commit/8d361169b8e487933d671ce347f0ce74922c80cc), [`95b5f6280`](https://github.com/withastro/astro/commit/95b5f6280d124f8d6f866dc3286406c272ee91bf), [`0586e20e8`](https://github.com/withastro/astro/commit/0586e20e8338e077b8eb1a3a96bdd19f5950c22f)]:
+  - astro@3.1.1
+  - @astrojs/underscore-redirects@0.3.0
+
 ## 7.1.0
 
 ### Minor Changes

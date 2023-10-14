@@ -48,13 +48,12 @@ declare module 'astro:assets' {
 		 * This is functionally equivalent to using the `<Image />` component, as the component calls this function internally.
 		 */
 		getImage: (
-			options:
-				| import('./dist/assets/types.js').ImageTransform
-				| import('./dist/assets/types.js').UnresolvedImageTransform
+			options: import('./dist/assets/types.js').UnresolvedImageTransform
 		) => Promise<import('./dist/assets/types.js').GetImageResult>;
 		imageConfig: import('./dist/@types/astro.js').AstroConfig['image'];
 		getConfiguredImageService: typeof import('./dist/assets/index.js').getConfiguredImageService;
 		Image: typeof import('./components/Image.astro').default;
+		Picture: typeof import('./components/Picture.astro').default;
 	};
 
 	type ImgAttributes = import('./dist/type-utils.js').WithRequired<
@@ -68,17 +67,10 @@ declare module 'astro:assets' {
 	export type RemoteImageProps = import('./dist/type-utils.js').Simplify<
 		import('./dist/assets/types.js').RemoteImageProps<ImgAttributes>
 	>;
-	export const { getImage, getConfiguredImageService, imageConfig, Image }: AstroAssets;
+	export const { getImage, getConfiguredImageService, imageConfig, Image, Picture }: AstroAssets;
 }
 
-type InputFormat = import('./dist/assets/types.js').ImageInputFormat;
-
-interface ImageMetadata {
-	src: string;
-	width: number;
-	height: number;
-	format: InputFormat;
-}
+type ImageMetadata = import('./dist/assets/types.js').ImageMetadata;
 
 declare module '*.gif' {
 	const metadata: ImageMetadata;
@@ -120,6 +112,13 @@ declare module 'astro:transitions' {
 
 	type ViewTransitionsModule = typeof import('./components/ViewTransitions.astro');
 	export const ViewTransitions: ViewTransitionsModule['default'];
+}
+
+declare module 'astro:transitions/client' {
+	type TransitionRouterModule = typeof import('./dist/transitions/router.js');
+	export const supportsViewTransitions: TransitionRouterModule['supportsViewTransitions'];
+	export const transitionEnabledOnThisPage: TransitionRouterModule['transitionEnabledOnThisPage'];
+	export const navigate: TransitionRouterModule['navigate'];
 }
 
 declare module 'astro:middleware' {

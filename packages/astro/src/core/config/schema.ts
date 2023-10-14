@@ -1,14 +1,21 @@
-import type { RehypePlugin, RemarkPlugin, RemarkRehype } from '@astrojs/markdown-remark';
+import type {
+	RehypePlugin,
+	RemarkPlugin,
+	RemarkRehype,
+	ShikiConfig,
+} from '@astrojs/markdown-remark';
 import { markdownConfigDefaults } from '@astrojs/markdown-remark';
-import type { ILanguageRegistration, IShikiTheme, Theme } from 'shiki';
+import { bundledThemes, type BuiltinTheme } from 'shikiji';
 import type { AstroUserConfig, ViteUserConfig } from '../../@types/astro.js';
 
 import type { OutgoingHttpHeaders } from 'node:http';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { BUNDLED_THEMES } from 'shiki';
 import { z } from 'zod';
 import { appendForwardSlash, prependForwardSlash, removeTrailingForwardSlash } from '../path.js';
+
+type ShikiLangs = NonNullable<ShikiConfig['langs']>;
+type ShikiTheme = NonNullable<ShikiConfig['theme']>;
 
 const ASTRO_CONFIG_DEFAULTS = {
 	root: '.',
@@ -140,7 +147,6 @@ export const AstroConfigSchema = z.object({
 				.optional()
 				.default(ASTRO_CONFIG_DEFAULTS.build.excludeMiddleware),
 		})
-		.optional()
 		.default({}),
 	server: z.preprocess(
 		// preprocess
@@ -158,7 +164,6 @@ export const AstroConfigSchema = z.object({
 				port: z.number().optional().default(ASTRO_CONFIG_DEFAULTS.server.port),
 				headers: z.custom<OutgoingHttpHeaders>().optional(),
 			})
-			.optional()
 			.default({})
 	),
 	redirects: z
@@ -230,11 +235,30 @@ export const AstroConfigSchema = z.object({
 				.default(ASTRO_CONFIG_DEFAULTS.markdown.syntaxHighlight),
 			shikiConfig: z
 				.object({
-					langs: z.custom<ILanguageRegistration>().array().default([]),
+					langs: z
+						.custom<ShikiLangs[number]>()
+						.array()
+						.transform((langs) => {
+							for (const lang of langs) {
+								// shiki -> shikiji compat
+								if (typeof lang === 'object') {
+									// `id` renamed to `name
+									if ((lang as any).id && !lang.name) {
+										lang.name = (lang as any).id;
+									}
+									// `grammar` flattened to lang itself
+									if ((lang as any).grammar) {
+										Object.assign(lang, (lang as any).grammar);
+									}
+								}
+							}
+							return langs;
+						})
+						.default([]),
 					theme: z
-						.enum(BUNDLED_THEMES as [Theme, ...Theme[]])
-						.or(z.custom<IShikiTheme>())
-						.default(ASTRO_CONFIG_DEFAULTS.markdown.shikiConfig.theme! as Theme),
+						.enum(Object.keys(bundledThemes) as [BuiltinTheme, ...BuiltinTheme[]])
+						.or(z.custom<ShikiTheme>())
+						.default(ASTRO_CONFIG_DEFAULTS.markdown.shikiConfig.theme as BuiltinTheme),
 					wrap: z.boolean().or(z.null()).default(ASTRO_CONFIG_DEFAULTS.markdown.shikiConfig.wrap!),
 				})
 				.default({}),
@@ -274,27 +298,11 @@ export const AstroConfigSchema = z.object({
 				.optional()
 				.default(ASTRO_CONFIG_DEFAULTS.experimental.optimizeHoistedScript),
 		})
-		.passthrough()
-		.refine(
-			(d) => {
-				const validKeys = Object.keys(ASTRO_CONFIG_DEFAULTS.experimental);
-				const invalidKeys = Object.keys(d).filter((key) => !validKeys.includes(key));
-				if (invalidKeys.length > 0) return false;
-				return true;
-			},
-			(d) => {
-				const validKeys = Object.keys(ASTRO_CONFIG_DEFAULTS.experimental);
-				const invalidKeys = Object.keys(d).filter((key) => !validKeys.includes(key));
-				return {
-					message: `Invalid experimental key: \`${invalidKeys.join(
-						', '
-					)}\`. \nMake sure the spelling is correct, and that your Astro version supports this experiment.\nSee https://docs.astro.build/en/reference/configuration-reference/#experimental-flags for more information.`,
-				};
-			}
+		.strict(
+			`Invalid or outdated experimental feature.\nCheck for incorrect spelling or outdated Astro version.\nSee https://docs.astro.build/en/reference/configuration-reference/#experimental-flags for a list of all current experiments.`
 		)
-		.optional()
 		.default({}),
-	legacy: z.object({}).optional().default({}),
+	legacy: z.object({}).default({}),
 });
 
 export type AstroConfigType = z.infer<typeof AstroConfigSchema>;
