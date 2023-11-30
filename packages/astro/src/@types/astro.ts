@@ -19,16 +19,22 @@ import type { AstroConfigType } from '../core/config/index.js';
 import type { AstroTimer } from '../core/config/timer.js';
 import type { TSConfig } from '../core/config/tsconfig.js';
 import type { AstroCookies } from '../core/cookies/index.js';
-import type { ResponseWithEncoding } from '../core/endpoint/index.js';
 import type { AstroIntegrationLogger, Logger, LoggerLevel } from '../core/logger/core.js';
+import type { AstroPreferences } from '../preferences/index.js';
 import type { AstroDevOverlay, DevOverlayCanvas } from '../runtime/client/dev-overlay/overlay.js';
-import type { DevOverlayHighlight } from '../runtime/client/dev-overlay/ui-library/highlight.js';
 import type { Icon } from '../runtime/client/dev-overlay/ui-library/icons.js';
-import type { DevOverlayToggle } from '../runtime/client/dev-overlay/ui-library/toggle.js';
-import type { DevOverlayTooltip } from '../runtime/client/dev-overlay/ui-library/tooltip.js';
-import type { DevOverlayWindow } from '../runtime/client/dev-overlay/ui-library/window.js';
+import type {
+	DevOverlayBadge,
+	DevOverlayButton,
+	DevOverlayCard,
+	DevOverlayHighlight,
+	DevOverlayIcon,
+	DevOverlayToggle,
+	DevOverlayTooltip,
+	DevOverlayWindow,
+} from '../runtime/client/dev-overlay/ui-library/index.js';
 import type { AstroComponentFactory, AstroComponentInstance } from '../runtime/server/index.js';
-import type { OmitIndexSignature, Simplify } from '../type-utils.js';
+import type { DeepPartial, OmitIndexSignature, Simplify } from '../type-utils.js';
 import type { SUPPORTED_MARKDOWN_FILE_EXTENSIONS } from './../core/constants.js';
 
 export { type AstroIntegrationLogger };
@@ -143,7 +149,6 @@ export interface CLIFlags {
 	host?: string | boolean;
 	port?: number;
 	config?: string;
-	drafts?: boolean;
 	open?: boolean;
 }
 
@@ -886,33 +891,6 @@ export interface AstroUserConfig {
 		 * ```
 		 */
 		inlineStylesheets?: 'always' | 'auto' | 'never';
-
-		/**
-		 * @docs
-		 * @name build.split
-		 * @type {boolean}
-		 * @default `false`
-		 * @deprecated Deprecated since version 3.0.
-		 * @description
-		 * The build config option `build.split` has been replaced by the adapter configuration option [`functionPerRoute`](/en/reference/adapter-reference/#functionperroute).
-		 *
-		 * Please see your [SSR adapter's documentation](/en/guides/integrations-guide/#official-integrations) for using `functionPerRoute` to define how your SSR code is bundled.
-		 *
-		 */
-		split?: boolean;
-
-		/**
-		 * @docs
-		 * @name build.excludeMiddleware
-		 * @type {boolean}
-		 * @default `false`
-		 * @deprecated Deprecated since version 3.0.
-		 * @description
-		 * The build config option `build.excludeMiddleware` has been replaced by the adapter configuration option [`edgeMiddleware`](/en/reference/adapter-reference/#edgemiddleware).
-		 *
-		 * Please see your [SSR adapter's documentation](/en/guides/integrations-guide/#official-integrations) for using `edgeMiddleware` to define whether or not any SSR middleware code will be bundled when built.
-		 */
-		excludeMiddleware?: boolean;
 	};
 
 	/**
@@ -1180,31 +1158,37 @@ export interface AstroUserConfig {
 	/**
 	 * @docs
 	 * @kind heading
+	 * @name Dev Overlay Options
+	 */
+	devOverlay?: {
+		/**
+		 * @docs
+		 * @name devOverlay.enabled
+		 * @type {boolean}
+		 * @default `true`
+		 * @description
+		 * Whether to enable the dev overlay. This overlay allows you to inspect your page islands, see helpful audits on performance and accessibility, and more.
+		 *
+		 * This option is scoped to the entire project, to only disable the overlay for yourself, run `npm run astro preferences disable devOverlay`. To disable the overlay for all your Astro projects, run `npm run astro preferences disable devOverlay --global`.
+		 */
+		enabled: boolean;
+		/**
+		 * @docs
+		 * @name devOverlay.defaultState
+		 * @type {'minimized' | 'expanded'}
+		 * @default `minimized`
+		 * @description
+		 * Whether the dev overlay should be expanded or minimized by default.
+		 */
+		defaultState: 'minimized' | 'expanded';
+	};
+
+	/**
+	 * @docs
+	 * @kind heading
 	 * @name Markdown Options
 	 */
 	markdown?: {
-		/**
-		 * @docs
-		 * @name markdown.drafts
-		 * @type {boolean}
-		 * @default `false`
-		 * @deprecated Deprecated since version 3.0. Use content collections instead.
-		 * @description
-		 * Control whether Markdown draft pages should be included in the build.
-		 *
-		 * A Markdown page is considered a draft if it includes `draft: true` in its frontmatter. Draft pages are always included & visible during development (`astro dev`) but by default they will not be included in your final build.
-		 *
-		 * ```js
-		 * {
-		 *   markdown: {
-		 *     // Example: Include all drafts in your final build
-		 *     drafts: true,
-		 *   }
-		 * }
-		 * ```
-		 */
-		drafts?: boolean;
-
 		/**
 		 * @docs
 		 * @name markdown.shikiConfig
@@ -1317,7 +1301,7 @@ export interface AstroUserConfig {
 		 * {
 		 *   markdown: {
 		 *     // Example: Translate the footnotes text to another language, here are the default English values
-		 *     remarkRehype: { footnoteLabel: "Footnotes", footnoteBackLabel: "Back to content"},
+		 *     remarkRehype: { footnoteLabel: "Footnotes", footnoteBackLabel: "Back to reference 1"},
 		 *   },
 		 * };
 		 * ```
@@ -1426,25 +1410,6 @@ export interface AstroUserConfig {
 
 		/**
 		 * @docs
-		 * @name experimental.devOverlay
-		 * @type {boolean}
-		 * @default `false`
-		 * @version 3.4.0
-		 * @description
-		 * Enable a dev overlay in development mode. This overlay allows you to inspect your page islands, see helpful audits on performance and accessibility, and more.
-		 *
-		 * ```js
-		 * {
-		 * 	experimental: {
-		 * 		devOverlay: true,
-		 * 	},
-		 * }
-		 * ```
-		 */
-		devOverlay?: boolean;
-
-		/**
-		 * @docs
 		 * @name experimental.i18n
 		 * @type {object}
 		 * @version 3.5.0
@@ -1519,23 +1484,43 @@ export interface AstroUserConfig {
 			/**
 			 * @docs
 			 * @kind h4
-			 * @name experimental.i18n.routingStrategy
-			 * @type {'prefix-always' | 'prefix-other-locales'}
-			 * @default 'prefix-other-locales'
-			 * @version 3.5.0
+			 * @name experimental.i18n.routing
+			 * @type {Routing}
+			 * @version 3.7.0
 			 * @description
 			 *
-			 * Controls the routing strategy to determine your site URLs. Set this based on your folder/URL path configuration for your default language:
-			 *
-			 *  - `prefix-other-locales`(default): Only non-default languages will display a language prefix.
-			 *    The `defaultLocale` will not show a language prefix and content files do not exist in a localized folder.
-			 *    URLs will be of the form `example.com/[locale]/content/` for all non-default languages, but `example.com/content/` for the default locale.
-			 *  - `prefix-always`: All URLs will display a language prefix.
-			 *    URLs will be of the form `example.com/[locale]/content/` for every route, including the default language.
-			 *    Localized folders are used for every language, including the default.
-			 *
+			 * Controls the routing strategy to determine your site URLs. Set this based on your folder/URL path configuration for your default language.
 			 */
-			routingStrategy?: 'prefix-always' | 'prefix-other-locales';
+			routing?: {
+				/**
+				 * @docs
+				 * @name experimental.i18n.routing.prefixDefaultLocale
+				 * @type {boolean}
+				 * @default `false`
+				 * @version 3.7.0
+				 * @description
+				 *
+				 * When `false`, only non-default languages will display a language prefix.
+				 * The `defaultLocale` will not show a language prefix and content files do not exist in a localized folder.
+				 *  URLs will be of the form `example.com/[locale]/content/` for all non-default languages, but `example.com/content/` for the default locale.
+				 *
+				 * When `true`, all URLs will display a language prefix.
+				 * URLs will be of the form `example.com/[locale]/content/` for every route, including the default language.
+				 * Localized folders are used for every language, including the default.
+				 */
+				prefixDefaultLocale: boolean;
+
+				/**
+				 * @name experimental.i18n.routing.strategy
+				 * @type {"pathname"}
+				 * @default `"pathname"`
+				 * @version 3.7.0
+				 * @description
+				 *
+				 * - `"pathanme": The strategy is applied to the pathname of the URLs
+				 */
+				strategy: 'pathname';
+			};
 		};
 		/**
 		 * @docs
@@ -1578,7 +1563,7 @@ export type InjectedScriptStage = 'before-hydration' | 'head-inline' | 'page' | 
 
 export interface InjectedRoute {
 	pattern: string;
-	entryPoint: string;
+	entrypoint: string;
 	prerender?: boolean;
 }
 
@@ -1714,6 +1699,7 @@ export interface AstroAdapterFeatures {
 export interface AstroSettings {
 	config: AstroConfig;
 	adapter: AstroAdapter | undefined;
+	preferences: AstroPreferences;
 	injectedRoutes: InjectedRoute[];
 	resolvedInjectedRoutes: ResolvedInjectedRoute[];
 	pageExtensions: string[];
@@ -1749,10 +1735,6 @@ export interface ComponentInstance {
 	css?: string[];
 	partial?: boolean;
 	prerender?: boolean;
-	/**
-	 * Only used for logging if deprecated drafts feature is used
-	 */
-	frontmatter?: Record<string, any>;
 	getStaticPaths?: (options: GetStaticPathsOptions) => GetStaticPathsResult;
 }
 
@@ -2056,10 +2038,8 @@ export interface AstroAdapter {
 	 *
 	 * If the adapter is not able to handle certain configurations, Astro will throw an error.
 	 */
-	supportedAstroFeatures?: AstroFeatureMap;
+	supportedAstroFeatures: AstroFeatureMap;
 }
-
-type Body = string;
 
 export type ValidRedirectStatus = 300 | 301 | 302 | 303 | 304 | 307 | 308;
 
@@ -2145,7 +2125,7 @@ export interface APIContext<
 	 *   ];
 	 * }
 	 *
-	 * export async function get({ params }) {
+	 * export async function GET({ params }) {
 	 *  return {
 	 * 	  body: `Hello user ${params.id}!`,
 	 *  }
@@ -2168,7 +2148,7 @@ export interface APIContext<
 	 *   ];
 	 * }
 	 *
-	 * export function get({ props }) {
+	 * export function GET({ props }) {
 	 *   return {
 	 *     body: `Hello ${props.name}!`,
 	 *   }
@@ -2184,7 +2164,7 @@ export interface APIContext<
 	 * Example usage:
 	 * ```ts
 	 * // src/pages/secret.ts
-	 * export function get({ redirect }) {
+	 * export function GET({ redirect }) {
 	 *   return redirect('/login');
 	 * }
 	 * ```
@@ -2217,7 +2197,6 @@ export interface APIContext<
 	 * ```
 	 */
 	locals: App.Locals;
-	ResponseWithEncoding: typeof ResponseWithEncoding;
 
 	/**
 	 * Available only when `experimental.i18n` enabled and in SSR.
@@ -2253,22 +2232,18 @@ export interface APIContext<
 	currentLocale: string | undefined;
 }
 
-export type EndpointOutput =
-	| {
-			body: Body;
-			encoding?: BufferEncoding;
-	  }
-	| {
-			body: Uint8Array;
-			encoding: 'binary';
-	  };
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type Routing = {
+	prefixDefaultLocale: boolean;
+	strategy: 'pathname';
+};
 
 export type APIRoute<Props extends Record<string, any> = Record<string, any>> = (
 	context: APIContext<Props>
-) => EndpointOutput | Response | Promise<EndpointOutput | Response>;
+) => Response | Promise<Response>;
 
 export interface EndpointHandler {
-	[method: string]: APIRoute | ((params: Params, request: Request) => EndpointOutput | Response);
+	[method: string]: APIRoute | ((params: Params, request: Request) => Response);
 }
 
 export type Props = Record<string, unknown>;
@@ -2311,7 +2286,7 @@ export interface AstroIntegration {
 			config: AstroConfig;
 			command: 'dev' | 'build' | 'preview';
 			isRestart: boolean;
-			updateConfig: (newConfig: Record<string, any>) => void;
+			updateConfig: (newConfig: DeepPartial<AstroConfig>) => AstroConfig;
 			addRenderer: (renderer: AstroRenderer) => void;
 			addWatchFile: (path: URL | string) => void;
 			injectScript: (stage: InjectedScriptStage, content: string) => void;
@@ -2373,20 +2348,16 @@ export interface AstroIntegration {
 	};
 }
 
-export type MiddlewareNext<R> = () => Promise<R>;
-export type MiddlewareHandler<R> = (
+export type MiddlewareNext = () => Promise<Response>;
+export type MiddlewareHandler = (
 	context: APIContext,
-	next: MiddlewareNext<R>
-) => Promise<R> | R | Promise<void> | void;
-
-export type MiddlewareResponseHandler = MiddlewareHandler<Response>;
-export type MiddlewareEndpointHandler = MiddlewareHandler<Response | EndpointOutput>;
-export type MiddlewareNextResponse = MiddlewareNext<Response>;
+	next: MiddlewareNext
+) => Promise<Response> | Response | Promise<void> | void;
 
 // NOTE: when updating this file with other functions,
 // remember to update `plugin-page.ts` too, to add that function as a no-op function.
-export type AstroMiddlewareInstance<R> = {
-	onRequest?: MiddlewareHandler<R>;
+export type AstroMiddlewareInstance = {
+	onRequest?: MiddlewareHandler;
 };
 
 export type AstroIntegrationMiddleware = {
@@ -2583,7 +2554,10 @@ export interface DevOverlayPlugin {
 export type DevOverlayMetadata = Window &
 	typeof globalThis & {
 		__astro_dev_overlay__: {
+			defaultState: AstroConfig['devOverlay']['defaultState'];
 			root: string;
+			version: string;
+			debugInfo: string;
 		};
 	};
 
@@ -2595,5 +2569,9 @@ declare global {
 		'astro-dev-overlay-tooltip': DevOverlayTooltip;
 		'astro-dev-overlay-highlight': DevOverlayHighlight;
 		'astro-dev-overlay-toggle': DevOverlayToggle;
+		'astro-dev-overlay-badge': DevOverlayBadge;
+		'astro-dev-overlay-button': DevOverlayButton;
+		'astro-dev-overlay-icon': DevOverlayIcon;
+		'astro-dev-overlay-card': DevOverlayCard;
 	}
 }
