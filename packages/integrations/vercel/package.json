@@ -1,7 +1,7 @@
 {
   "name": "@astrojs/vercel",
   "description": "Deploy your site to Vercel",
-  "version": "6.0.0-beta.1",
+  "version": "6.0.0-beta.2",
   "type": "module",
   "author": "withastro",
   "license": "MIT",
@@ -17,8 +17,6 @@
   "bugs": "https://github.com/withastro/astro/issues",
   "homepage": "https://docs.astro.build/en/guides/integrations-guide/vercel/",
   "exports": {
-    "./edge": "./dist/edge/throw.js",
-    "./edge/entrypoint": "./dist/edge/throw.js",
     "./serverless": "./dist/serverless/adapter.js",
     "./serverless/entrypoint": "./dist/serverless/entrypoint.js",
     "./static": "./dist/static/adapter.js",

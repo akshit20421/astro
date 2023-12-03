@@ -18,18 +18,28 @@ const settingsRows = [
 		settingKey: 'disablePluginNotification',
 		changeEvent: (evt: Event) => {
 			if (evt.currentTarget instanceof HTMLInputElement) {
+				const devOverlay = document.querySelector('astro-dev-toolbar');
+
+				if (devOverlay) {
+					devOverlay.setNotificationVisible(!evt.currentTarget.checked);
+				}
+
 				settings.updateSetting('disablePluginNotification', evt.currentTarget.checked);
+				const action = evt.currentTarget.checked ? 'enabled' : 'disabled';
+				settings.log(`Plugin notification badges ${action}`);
 			}
 		},
 	},
 	{
 		name: 'Verbose logging',
-		description: 'Log additional information to the console.',
+		description: 'Logs dev overlay events in the browser console.',
 		input: 'checkbox',
 		settingKey: 'verbose',
 		changeEvent: (evt: Event) => {
 			if (evt.currentTarget instanceof HTMLInputElement) {
 				settings.updateSetting('verbose', evt.currentTarget.checked);
+				const action = evt.currentTarget.checked ? 'enabled' : 'disabled';
+				settings.log(`Verbose logging ${action}`);
 			}
 		},
 	},
@@ -47,7 +57,7 @@ export default {
 		function createSettingsWindow() {
 			const windowElement = createWindowElement(
 				`<style>
-					:host astro-dev-overlay-window {
+					:host astro-dev-toolbar-window {
 						height: 480px;
 
 						--color-purple: rgba(224, 204, 250, 1);
@@ -88,7 +98,7 @@ export default {
 						font-size: 22px;
 					}
 
-					astro-dev-overlay-icon {
+					astro-dev-toolbar-icon {
 						width: 1em;
    					height: 1em;
     				display: block;
@@ -113,7 +123,7 @@ export default {
 					}
 				</style>
 				<header>
-					<h1><astro-dev-overlay-icon icon="gear"></astro-dev-overlay-icon> Settings</h1>
+					<h1><astro-dev-toolbar-icon icon="gear"></astro-dev-toolbar-icon> Settings</h1>
 				</header>
 
 				<hr />
@@ -140,7 +150,7 @@ export default {
 
 				switch (setting.input) {
 					case 'checkbox': {
-						const astroToggle = document.createElement('astro-dev-overlay-toggle');
+						const astroToggle = document.createElement('astro-dev-toolbar-toggle');
 						astroToggle.input.addEventListener('change', setting.changeEvent);
 						astroToggle.input.checked = settings.config[setting.settingKey];
 						label.append(astroToggle);

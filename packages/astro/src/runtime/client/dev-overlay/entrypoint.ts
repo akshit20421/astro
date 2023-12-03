@@ -1,6 +1,5 @@
 import type { DevOverlayPlugin as DevOverlayPluginDefinition } from '../../../@types/astro.js';
 import { type AstroDevOverlay, type DevOverlayPlugin } from './overlay.js';
-
 import { settings } from './settings.js';
 
 let overlay: AstroDevOverlay;
@@ -23,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 			DevOverlayBadge,
 			DevOverlayIcon,
 		},
-		{ getIconElement, isDefinedIcon },
 	] = await Promise.all([
 		// @ts-expect-error
 		import('astro:dev-overlay'),
@@ -33,22 +31,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 		import('./plugins/settings.js'),
 		import('./overlay.js'),
 		import('./ui-library/index.js'),
-		import('./ui-library/icons.js'),
 	]);
 
 	// Register custom elements
-	customElements.define('astro-dev-overlay', AstroDevOverlay);
-	customElements.define('astro-dev-overlay-window', DevOverlayWindow);
-	customElements.define('astro-dev-overlay-plugin-canvas', DevOverlayCanvas);
-	customElements.define('astro-dev-overlay-tooltip', DevOverlayTooltip);
-	customElements.define('astro-dev-overlay-highlight', DevOverlayHighlight);
-	customElements.define('astro-dev-overlay-card', DevOverlayCard);
-	customElements.define('astro-dev-overlay-toggle', DevOverlayToggle);
-	customElements.define('astro-dev-overlay-button', DevOverlayButton);
-	customElements.define('astro-dev-overlay-badge', DevOverlayBadge);
-	customElements.define('astro-dev-overlay-icon', DevOverlayIcon);
+	customElements.define('astro-dev-toolbar', AstroDevOverlay);
+	customElements.define('astro-dev-toolbar-window', DevOverlayWindow);
+	customElements.define('astro-dev-toolbar-plugin-canvas', DevOverlayCanvas);
+	customElements.define('astro-dev-toolbar-tooltip', DevOverlayTooltip);
+	customElements.define('astro-dev-toolbar-highlight', DevOverlayHighlight);
+	customElements.define('astro-dev-toolbar-card', DevOverlayCard);
+	customElements.define('astro-dev-toolbar-toggle', DevOverlayToggle);
+	customElements.define('astro-dev-toolbar-button', DevOverlayButton);
+	customElements.define('astro-dev-toolbar-badge', DevOverlayBadge);
+	customElements.define('astro-dev-toolbar-icon', DevOverlayIcon);
 
-	overlay = document.createElement('astro-dev-overlay');
+	// Add deprecated names
+	const deprecated = (Parent: any) => class extends Parent {};
+	customElements.define('astro-dev-overlay', deprecated(AstroDevOverlay));
+	customElements.define('astro-dev-overlay-window', deprecated(DevOverlayWindow));
+	customElements.define('astro-dev-overlay-plugin-canvas', deprecated(DevOverlayCanvas));
+	customElements.define('astro-dev-overlay-tooltip', deprecated(DevOverlayTooltip));
+	customElements.define('astro-dev-overlay-highlight', deprecated(DevOverlayHighlight));
+	customElements.define('astro-dev-overlay-card', deprecated(DevOverlayCard));
+	customElements.define('astro-dev-overlay-toggle', deprecated(DevOverlayToggle));
+	customElements.define('astro-dev-overlay-button', deprecated(DevOverlayButton));
+	customElements.define('astro-dev-overlay-badge', deprecated(DevOverlayBadge));
+	customElements.define('astro-dev-overlay-icon', deprecated(DevOverlayIcon));
+
+	overlay = document.createElement('astro-dev-toolbar');
 
 	const preparePlugin = (
 		pluginDefinition: DevOverlayPluginDefinition,
@@ -76,19 +86,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 			plugin.notification.state = newState;
 
-			if (settings.config.disablePluginNotification === false) {
-				target.querySelector('.notification')?.toggleAttribute('data-active', newState);
-			}
+			target.querySelector('.notification')?.toggleAttribute('data-active', newState);
 		});
 
-		eventTarget.addEventListener('toggle-plugin', async (evt) => {
+		const onToggleApp = async (evt: Event) => {
 			let newState = undefined;
 			if (evt instanceof CustomEvent) {
 				newState = evt.detail.state ?? true;
 			}
 
 			await overlay.setPluginStatus(plugin, newState);
-		});
+		};
+
+		eventTarget.addEventListener('toggle-app', onToggleApp);
+		// Deprecated
+		eventTarget.addEventListener('toggle-plugin', onToggleApp);
 
 		return plugin;
 	};
@@ -133,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 						background: #B33E66;
 					}
 
-					.notification[data-active] {
+					#dropdown:not([data-no-notification]) .notification[data-active] {
 						display: block;
 					}
 
@@ -179,6 +191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 				const dropdown = document.createElement('div');
 				dropdown.id = 'dropdown';
+				dropdown.toggleAttribute('data-no-notification', settings.config.disablePluginNotification);
 
 				for (const plugin of hiddenPlugins) {
 					const buttonContainer = document.createElement('div');
@@ -209,9 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 					plugin.eventTarget.addEventListener('toggle-notification', (evt) => {
 						if (!(evt instanceof CustomEvent)) return;
 
-						if (settings.config.disablePluginNotification === false) {
-							notification.toggleAttribute('data-active', evt.detail.state ?? true);
-						}
+						notification.toggleAttribute('data-active', evt.detail.state ?? true);
 
 						eventTarget.dispatchEvent(
 							new CustomEvent('toggle-notification', {
