@@ -5,7 +5,8 @@ import type { AstroConfig } from '../../@types/astro.js';
 import { transform } from '@astrojs/compiler';
 import { fileURLToPath } from 'node:url';
 import { normalizePath } from 'vite';
-import { AggregateError, AstroError, CompilerError } from '../errors/errors.js';
+import type { AstroError } from '../errors/errors.js';
+import { AggregateError, CompilerError } from '../errors/errors.js';
 import { AstroErrorData } from '../errors/index.js';
 import { resolvePath } from '../util.js';
 import { createStylePreprocessor } from './style.js';
@@ -47,7 +48,7 @@ export async function compile({
 			resultScopedSlot: true,
 			transitionsAnimationURL: 'astro/components/viewtransitions.css',
 			annotateSourceFile:
-				!viteConfig.isProduction && astroConfig.devOverlay && astroConfig.devOverlay.enabled,
+				viteConfig.command === 'serve' && astroConfig.devToolbar && astroConfig.devToolbar.enabled,
 			preprocessStyle: createStylePreprocessor({
 				filename,
 				viteConfig,

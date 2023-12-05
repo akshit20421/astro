@@ -1,23 +1,47 @@
-import type { DevOverlayMetadata, DevOverlayPlugin } from '../../../../@types/astro.js';
-import type { DevOverlayHighlight } from '../ui-library/highlight.js';
-import { attachTooltipToHighlight, createHighlight, positionHighlight } from './utils/highlight.js';
-import { createWindowElement } from './utils/window.js';
+import type { DevOverlayMetadata, DevOverlayPlugin } from '../../../../../@types/astro.js';
+import type { DevOverlayHighlight } from '../../ui-library/highlight.js';
+import {
+	attachTooltipToHighlight,
+	createHighlight,
+	positionHighlight,
+} from '../utils/highlight.js';
+import { createWindowElement } from '../utils/window.js';
+import { a11y } from './a11y.js';
 
 const icon =
 	'<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 1 20 16"><path fill="#fff" d="M.6 2A1.1 1.1 0 0 1 1.7.9h16.6a1.1 1.1 0 1 1 0 2.2H1.6A1.1 1.1 0 0 1 .8 2Zm1.1 7.1h6a1.1 1.1 0 0 0 0-2.2h-6a1.1 1.1 0 0 0 0 2.2ZM9.3 13H1.8a1.1 1.1 0 1 0 0 2.2h7.5a1.1 1.1 0 1 0 0-2.2Zm11.3 1.9a1.1 1.1 0 0 1-1.5 0l-1.7-1.7a4.1 4.1 0 1 1 1.6-1.6l1.6 1.7a1.1 1.1 0 0 1 0 1.6Zm-5.3-3.4a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/></svg>';
 
-interface AuditRule {
+type DynamicString = string | ((element: Element) => string);
+
+export interface AuditRule {
+	code: string;
+	title: DynamicString;
+	message: DynamicString;
+}
+
+export interface ResolvedAuditRule {
+	code: string;
 	title: string;
 	message: string;
 }
 
-const selectorBasedRules: (AuditRule & { selector: string })[] = [
-	{
-		title: 'Missing `alt` tag',
-		message: 'The alt attribute is important for accessibility.',
-		selector: 'img:not([alt])',
-	},
-];
+export interface AuditRuleWithSelector extends AuditRule {
+	selector: string;
+	match?: (element: Element) => boolean | null | undefined | void;
+}
+
+const rules = [...a11y];
+
+const dynamicAuditRuleKeys: Array<keyof AuditRule> = ['title', 'message'];
+function resolveAuditRule(rule: AuditRule, element: Element): ResolvedAuditRule {
+	let resolved: ResolvedAuditRule = { ...rule } as any;
+	for (const key of dynamicAuditRuleKeys) {
+		const value = rule[key];
+		if (typeof value === 'string') continue;
+		resolved[key] = value(element);
+	}
+	return resolved;
+}
 
 export default {
 	id: 'astro:audit',
@@ -31,17 +55,49 @@ export default {
 		document.addEventListener('astro:after-swap', async () => lint());
 		document.addEventListener('astro:page-load', async () => refreshLintPositions);
 
+		function onPageClick(event: MouseEvent) {
+			const target = event.target as Element | null;
+			if (!target) return;
+			if (!target.closest) return;
+			if (target.closest('astro-dev-toolbar')) return;
+			eventTarget.dispatchEvent(
+				new CustomEvent('toggle-plugin', {
+					detail: {
+						state: false,
+					},
+				})
+			);
+		}
+		eventTarget.addEventListener('plugin-toggled', (event: any) => {
+			if (event.detail.state === true) {
+				document.addEventListener('click', onPageClick, true);
+			} else {
+				document.removeEventListener('click', onPageClick, true);
+			}
+		});
+
 		async function lint() {
 			audits.forEach(({ highlightElement }) => {
 				highlightElement.remove();
 			});
 			audits = [];
 			canvas.getElementById('no-audit')?.remove();
+			const selectorCache = new Map<string, NodeListOf<Element>>();
 
-			for (const rule of selectorBasedRules) {
-				const elements = document.querySelectorAll(rule.selector);
-
-				for (const element of elements) {
+			for (const rule of rules) {
+				const elements =
+					selectorCache.get(rule.selector) ?? document.querySelectorAll(rule.selector);
+				let matches: Element[] = [];
+				if (typeof rule.match === 'undefined') {
+					matches = Array.from(elements);
+				} else {
+					for (const element of elements) {
+						if (rule.match(element)) {
+							matches.push(element);
+						}
+					}
+				}
+				for (const element of matches) {
 					await createAuditProblem(rule, element);
 				}
 			}
@@ -68,7 +124,7 @@ export default {
 						header {
 							display: flex;
 						}
-	
+
 						h1 {
 							display: flex;
 							align-items: center;
@@ -89,8 +145,11 @@ export default {
 						}
 					</style>
 					<header>
-						<h1><astro-dev-toolbar-icon icon="check-circle"></astro-dev-toolbar-icon>No issues detected.</h1>
+						<h1><astro-dev-toolbar-icon icon="check-circle"></astro-dev-toolbar-icon>No accessibility issues detected.</h1>
 					</header>
+					<p>
+						Nice work! This app scans the page and highlights common accessibility issues for you, like a missing "alt" attribute on an image.
+					</p>
 					`
 				);
 
@@ -127,6 +186,7 @@ export default {
 
 			// If the element is hidden, don't do anything
 			if (targetedElement.offsetParent === null || computedStyle.display === 'none') {
+				audits.push();
 				return;
 			}
 
@@ -146,14 +206,15 @@ export default {
 
 		function buildAuditTooltip(rule: AuditRule, element: Element) {
 			const tooltip = document.createElement('astro-dev-toolbar-tooltip');
+			const { title, message } = resolveAuditRule(rule, element);
 
 			tooltip.sections = [
 				{
 					icon: 'warning',
-					title: rule.title,
+					title: escapeHtml(title),
 				},
 				{
-					content: rule.message,
+					content: escapeHtml(message),
 				},
 			];
 
@@ -178,6 +239,15 @@ export default {
 			}
 
 			return tooltip;
+		}
+
+		function escapeHtml(unsafe: string) {
+			return unsafe
+				.replace(/&/g, '&amp;')
+				.replace(/</g, '&lt;')
+				.replace(/>/g, '&gt;')
+				.replace(/"/g, '&quot;')
+				.replace(/'/g, '&#039;');
 		}
 	},
 } satisfies DevOverlayPlugin;
