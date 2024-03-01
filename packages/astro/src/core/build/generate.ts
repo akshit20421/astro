@@ -327,12 +327,6 @@ async function getPathsForRoute(
 	if (route.pathname) {
 		paths.push(route.pathname);
 		builtPaths.add(route.pathname);
-		for (const virtualRoute of route.fallbackRoutes) {
-			if (virtualRoute.pathname) {
-				paths.push(virtualRoute.pathname);
-				builtPaths.add(virtualRoute.pathname);
-			}
-		}
 	} else {
 		const staticPaths = await callGetStaticPaths({
 			mod,
@@ -477,12 +471,25 @@ async function generatePath(
 	route: RouteData
 ) {
 	const { mod } = gopts;
-	const { config, logger, options, serverLike } = pipeline;
+	const { config, logger, options } = pipeline;
 	logger.debug('build', `Generating: ${pathname}`);
 
 	// This adds the page name to the array so it can be shown as part of stats.
 	if (route.type === 'page') {
 		addPageName(pathname, options);
+	}
+
+	// Do not render the fallback route if there is already a translated page
+	// with the same path
+	if (
+		route.type === 'fallback' &&
+		// If route is index page, continue rendering. The index page should
+		// always be rendered
+		route.pathname !== '/' &&
+		// Check if there is a translated page with the same path
+		Object.values(options.allPages).some((val) => pathname.match(val.route.pattern))
+	) {
+		return;
 	}
 
 	const url = getUrlForPath(
@@ -495,10 +502,11 @@ async function generatePath(
 	);
 
 	const request = createRequest({
+		base: config.base,
 		url,
 		headers: new Headers(),
 		logger,
-		ssr: serverLike,
+		staticLike: true,
 	});
 	const renderContext = RenderContext.create({ pipeline, pathname, request, routeData: route });
 
