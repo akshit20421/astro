@@ -1,5 +1,23 @@
 # @astrojs/db
 
+## 0.8.3
+
+### Patch Changes
+
+- [#10431](https://github.com/withastro/astro/pull/10431) [`1076864cc4aa4b4dad570bbab9907996642cdd1f`](https://github.com/withastro/astro/commit/1076864cc4aa4b4dad570bbab9907996642cdd1f) Thanks [@FredKSchott](https://github.com/FredKSchott)! - Add wait time for the db token to propagate
+
+- [#10432](https://github.com/withastro/astro/pull/10432) [`4e24628aacc556515b27d0c04361df1526ae778f`](https://github.com/withastro/astro/commit/4e24628aacc556515b27d0c04361df1526ae778f) Thanks [@FredKSchott](https://github.com/FredKSchott)! - Add all regions to the link command
+
+## 0.8.2
+
+### Patch Changes
+
+- [#10409](https://github.com/withastro/astro/pull/10409) [`96c8bca19aa477318b5eb48af12b260a6f173e25`](https://github.com/withastro/astro/commit/96c8bca19aa477318b5eb48af12b260a6f173e25) Thanks [@lilnasy](https://github.com/lilnasy)! - Fixes an issue where one table schema could not reference text fields of another table schema.
+
+- [#10428](https://github.com/withastro/astro/pull/10428) [`189ec47c1e3232d8b4db42035ddd44ea862ecfca`](https://github.com/withastro/astro/commit/189ec47c1e3232d8b4db42035ddd44ea862ecfca) Thanks [@FredKSchott](https://github.com/FredKSchott)! - Fix an issue where short-lived tokens were not being authorized
+
+- [#10420](https://github.com/withastro/astro/pull/10420) [`2db25c05a467f2ffd6ebff5eb82076449fa9d72f`](https://github.com/withastro/astro/commit/2db25c05a467f2ffd6ebff5eb82076449fa9d72f) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Fixes some situations where failing requests would not error properly
+
 ## 0.8.1
 
 ### Patch Changes

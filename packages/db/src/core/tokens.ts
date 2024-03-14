@@ -2,8 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { green } from 'kleur/colors';
+import ora from 'ora';
 import { MISSING_PROJECT_ID_ERROR, MISSING_SESSION_ID_ERROR } from './errors.js';
-import { getAstroStudioEnv, getAstroStudioUrl } from './utils.js';
+import { getAstroStudioEnv, getAstroStudioUrl, safeFetch } from './utils.js';
 
 export const SESSION_LOGIN_FILE = pathToFileURL(join(homedir(), '.astro', 'session-token'));
 export const PROJECT_ID_FILE = pathToFileURL(join(process.cwd(), '.astro', 'link'));
@@ -31,13 +33,26 @@ class ManagedRemoteAppToken implements ManagedAppToken {
 	renewTimer: NodeJS.Timeout | undefined;
 
 	static async create(sessionToken: string, projectId: string) {
-		const response = await fetch(new URL(`${getAstroStudioUrl()}/auth/cli/token-create`), {
-			method: 'POST',
-			headers: new Headers({
-				Authorization: `Bearer ${sessionToken}`,
-			}),
-			body: JSON.stringify({ projectId }),
-		});
+		const spinner = ora('Connecting to remote database...').start();
+		const response = await safeFetch(
+			new URL(`${getAstroStudioUrl()}/auth/cli/token-create`),
+			{
+				method: 'POST',
+				headers: new Headers({
+					Authorization: `Bearer ${sessionToken}`,
+				}),
+				body: JSON.stringify({ projectId }),
+			},
+			(res) => {
+				throw new Error(`Failed to create token: ${res.status} ${res.statusText}`);
+			}
+		);
+		// Wait for 2 seconds! This is the maximum time we would reasonably expect a token
+		// to be created and propagate to all the necessary DB services. Without this, you
+		// risk a token being created, used immediately, and failing to authenticate.
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+		spinner.succeed(green('Connected to remote database.'));
+
 		const { token: shortLivedAppToken, ttl } = await response.json();
 		return new ManagedRemoteAppToken({
 			token: shortLivedAppToken,
@@ -55,15 +70,21 @@ class ManagedRemoteAppToken implements ManagedAppToken {
 		this.renewTimer = setTimeout(() => this.renew(), (1000 * 60 * 5) / 2);
 	}
 
-	private async fetch(url: string, body: unknown) {
-		return fetch(`${getAstroStudioUrl()}${url}`, {
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${this.session}`,
-				'Content-Type': 'application/json',
+	private async fetch(url: string, body: Record<string, unknown>) {
+		return safeFetch(
+			`${getAstroStudioUrl()}${url}`,
+			{
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${this.session}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(body),
 			},
-			body: JSON.stringify(body),
-		});
+			() => {
+				throw new Error(`Failed to fetch ${url}.`);
+			}
+		);
 	}
 
 	async renew() {
