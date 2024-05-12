@@ -69,6 +69,19 @@ export const ClientAddressNotAvailable = {
 /**
  * @docs
  * @see
+ * - [Opting-in to pre-rendering](https://docs.astro.build/en/guides/server-side-rendering/#opting-in-to-pre-rendering-in-server-mode)
+ * - [Astro.clientAddress](https://docs.astro.build/en/reference/api-reference/#astroclientaddress)
+ * @description
+ * The `Astro.clientAddress` property cannot be used inside prerendered routes.
+ */
+export const PrerenderClientAddressNotAvailable = {
+	name: 'PrerenderClientAddressNotAvailable',
+	title: '`Astro.clientAddress` cannot be used inside prerendered routes.',
+	message: `\`Astro.clientAddress\` cannot be used inside prerendered routes`,
+} satisfies ErrorData;
+/**
+ * @docs
+ * @see
  * - [Enabling SSR in Your Project](https://docs.astro.build/en/guides/server-side-rendering/)
  * - [Astro.clientAddress](https://docs.astro.build/en/reference/api-reference/#astroclientaddress)
  * @description
@@ -1154,6 +1167,18 @@ export const i18nNotEnabled = {
 	title: 'i18n Not Enabled',
 	message: 'The `astro:i18n` module can not be used without enabling i18n in your Astro config.',
 	hint: 'See https://docs.astro.build/en/guides/internationalization for a guide on setting up i18n.',
+} satisfies ErrorData;
+
+/**
+ * @docs
+ * @description
+ *
+ * Astro couldn't find a route matching the one provided by the user
+ */
+export const RouteNotFound = {
+	name: 'RouteNotFound',
+	title: 'Route not found.',
+	message: `Astro could not find a route that matches the one you requested.`,
 } satisfies ErrorData;
 
 /**
