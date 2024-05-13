@@ -1,5 +1,11 @@
 # astro
 
+## 4.8.3
+
+### Patch Changes
+
+- [#11006](https://github.com/withastro/astro/pull/11006) [`7418bb0`](https://github.com/withastro/astro/commit/7418bb054cf74a131877497b4b70cf0980de4c6b) Thanks [@bholmesdev](https://github.com/bholmesdev)! - Fix `locals` access from action handlers
+
 ## 4.8.2
 
 ### Patch Changes
@@ -117,7 +123,7 @@
   export const server = {
     like: defineAction({
       input: z.object({ postId: z.string() }),
-      handler: async ({ postId }, context) => {
+      handler: async ({ postId }) => {
         // update likes in db
 
         return likes;
@@ -130,7 +136,7 @@
 
         body: z.string(),
       }),
-      handler: async ({ postId }, context) => {
+      handler: async ({ postId }) => {
         // insert comments in db
 
         return comment;
