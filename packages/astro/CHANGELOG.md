@@ -1,5 +1,23 @@
 # astro
 
+## 4.9.2
+
+### Patch Changes
+
+- [#11138](https://github.com/withastro/astro/pull/11138) [`98e0372`](https://github.com/withastro/astro/commit/98e0372cfd47a3e025be2ac68d1e9ebf06cf548b) Thanks [@ematipico](https://github.com/ematipico)! - You can now pass `props` when rendering a component using the Container APIs:
+
+  ```js
+  import { experimental_AstroContainer as AstroContainer } from 'astro/container';
+  import Card from '../src/components/Card.astro';
+
+  const container = await AstroContainer.create();
+  const result = await container.renderToString(Card, {
+    props: {
+      someState: true,
+    },
+  });
+  ```
+
 ## 4.9.1
 
 ### Patch Changes
@@ -38,7 +56,7 @@
   });
   ```
 
-  For a complete reference, see the [Container API docs](/en/reference/container-reference/).
+  For a complete reference, see the [Container API docs](https://docs.astro.build/en/reference/container-reference/).
 
   For a feature overview, and to give feedback on this experimental API, see the [Container API roadmap discussion](https://github.com/withastro/roadmap/pull/916).
 
