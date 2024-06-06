@@ -152,12 +152,20 @@ declare module 'astro:i18n' {
 	export * from 'astro/virtual-modules/i18n.js';
 }
 
+declare module 'astro:container' {
+	export * from 'astro/virtual-modules/container.js';
+}
+
 declare module 'astro:middleware' {
 	export * from 'astro/virtual-modules/middleware.js';
 }
 
 declare module 'astro:components' {
 	export * from 'astro/components';
+}
+
+declare module 'astro:env/setup' {
+	export * from 'astro/virtual-modules/env-setup.js';
 }
 
 type MD = import('./dist/@types/astro.js').MarkdownInstance<Record<string, any>>;

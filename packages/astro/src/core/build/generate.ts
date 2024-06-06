@@ -44,8 +44,6 @@ import { getOutputFilename, isServerLikeOutput } from '../util.js';
 import { getOutDirWithinCwd, getOutFile, getOutFolder } from './common.js';
 import { cssOrder, mergeInlineCss } from './internal.js';
 import { BuildPipeline } from './pipeline.js';
-import { ASTRO_PAGE_MODULE_ID } from './plugins/plugin-pages.js';
-import { getVirtualModulePageName } from './plugins/util.js';
 import type {
 	PageBuildData,
 	SinglePageBuiltModule,
@@ -383,7 +381,19 @@ function getUrlForPath(
 	 * pathname: /, /foo
 	 * base: /
 	 */
-	const ending = format === 'directory' ? (trailingSlash === 'never' ? '' : '/') : '.html';
+
+	let ending: string;
+	switch (format) {
+		case 'directory':
+		case 'preserve': {
+			ending = trailingSlash === 'never' ? '' : '/';
+			break;
+		}
+		default: {
+			ending = '.html';
+			break;
+		}
+	}
 	let buildPathname: string;
 	if (pathname === '/' || pathname === '') {
 		buildPathname = base;
@@ -559,5 +569,6 @@ function createBuildManifest(
 		middleware,
 		rewritingEnabled: settings.config.experimental.rewriting,
 		checkOrigin: settings.config.security?.checkOrigin ?? false,
+		experimentalEnvGetSecretEnabled: false,
 	};
 }

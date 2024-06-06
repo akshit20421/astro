@@ -1,6 +1,6 @@
 {
   "name": "astro",
-  "version": "4.9.2",
+  "version": "4.10.0",
   "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
   "type": "module",
   "author": "withastro",
@@ -32,6 +32,7 @@
       "default": "./dist/core/index.js"
     },
     "./env": "./env.d.ts",
+    "./env/runtime": "./dist/env/runtime.js",
     "./types": "./types.d.ts",
     "./client": "./client.d.ts",
     "./astro-jsx": "./astro-jsx.d.ts",
@@ -100,8 +101,6 @@
     "env.d.ts",
     "client.d.ts",
     "jsx-runtime.d.ts",
-    "content-types.template.d.ts",
-    "content-module.template.mjs",
     "templates",
     "astro-jsx.d.ts",
     "types.d.ts",
