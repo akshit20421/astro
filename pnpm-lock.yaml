@@ -2539,6 +2539,21 @@ importers:
         specifier: workspace:*
         version: link:../../..
 
+  packages/astro/test/fixtures/container-react:
+    dependencies:
+      '@astrojs/react':
+        specifier: workspace:*
+        version: link:../../../../integrations/react
+      astro:
+        specifier: workspace:*
+        version: link:../../..
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+
   packages/astro/test/fixtures/content:
     dependencies:
       '@astrojs/mdx':
@@ -2941,6 +2956,12 @@ importers:
         version: link:../../..
 
   packages/astro/test/fixtures/error-non-error:
+    dependencies:
+      astro:
+        specifier: workspace:*
+        version: link:../../..
+
+  packages/astro/test/fixtures/extension-matching:
     dependencies:
       astro:
         specifier: workspace:*
@@ -3482,6 +3503,12 @@ importers:
         version: link:../../..
 
   packages/astro/test/fixtures/rewrite-runtime-error:
+    dependencies:
+      astro:
+        specifier: workspace:*
+        version: link:../../..
+
+  packages/astro/test/fixtures/rewrite-runtime-error-custom500:
     dependencies:
       astro:
         specifier: workspace:*
@@ -9575,7 +9602,6 @@ packages:
 
   libsql@0.3.12:
     resolution: {integrity: sha512-to30hj8O3DjS97wpbKN6ERZ8k66MN1IaOfFLR6oHqd25GMiPJ/ZX0VaZ7w+TsPmxcFS3p71qArj/hiedCyvXCg==}
-    cpu: [x64, arm64, wasm32]
     os: [darwin, linux, win32]
 
   lilconfig@2.1.0:
