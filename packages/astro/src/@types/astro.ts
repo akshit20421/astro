@@ -50,7 +50,7 @@ import type {
 	TransitionBeforePreparationEvent,
 	TransitionBeforeSwapEvent,
 } from '../transitions/events.js';
-import type { DeepPartial, OmitIndexSignature, Simplify, WithRequired } from '../type-utils.js';
+import type { DeepPartial, OmitIndexSignature, Simplify } from '../type-utils.js';
 import type { SUPPORTED_MARKDOWN_FILE_EXTENSIONS } from './../core/constants.js';
 
 export type { AstroIntegrationLogger, ToolbarServerHelpers };
@@ -262,7 +262,7 @@ export interface AstroGlobal<
 	 * ```
 	 */
 	getActionResult: AstroSharedContext['getActionResult'];
-	/** Redirect to another page (**SSR Only**)
+	/** Redirect to another page
 	 *
 	 * Example usage:
 	 * ```typescript
@@ -271,7 +271,7 @@ export interface AstroGlobal<
 	 * }
 	 * ```
 	 *
-	 * [Astro reference](https://docs.astro.build/en/guides/server-side-rendering/)
+	 * [Astro reference](https://docs.astro.build/en/reference/api-reference/#astroredirect)
 	 */
 	redirect: AstroSharedContext['redirect'];
 	/**
