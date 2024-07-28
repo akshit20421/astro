@@ -2704,7 +2704,7 @@ export interface Page<T = any> {
 	total: number;
 	/** the current page number, starting from 1 */
 	currentPage: number;
-	/** number of items per page (default: 25) */
+	/** number of items per page (default: 10) */
 	size: number;
 	/** number of last page */
 	lastPage: number;
@@ -3324,6 +3324,7 @@ export interface SSRResult {
 	 * Whether the page has failed with a non-recoverable error, or the client disconnected.
 	 */
 	cancelled: boolean;
+	base: string;
 	styles: Set<SSRElement>;
 	scripts: Set<SSRElement>;
 	links: Set<SSRElement>;
@@ -3352,6 +3353,7 @@ export interface SSRResult {
 	pathname: string;
 	cookies: AstroCookies | undefined;
 	serverIslandNameMap: Map<string, string>;
+	trailingSlash: AstroConfig['trailingSlash'];
 	_metadata: SSRMetadata;
 }
 
