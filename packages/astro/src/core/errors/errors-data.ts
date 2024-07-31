@@ -1141,6 +1141,7 @@ export const MissingMiddlewareForInternationalization = {
 } satisfies ErrorData;
 
 /**
+ * @deprecated
  * @docs
  * @description
  * The user tried to rewrite using a route that doesn't exist, or it emitted a runtime error during its rendering phase.
@@ -1280,7 +1281,7 @@ export const ServerOnlyModule = {
  *
  * @see
  * - [Request.clone()](https://developer.mozilla.org/en-US/docs/Web/API/Request/clone)
- * - [Astro.rewrite](https://docs.astro.build/en/reference/configuration-reference/#experimentalrewriting)
+ * - [Astro.rewrite](https://docs.astro.build/en/reference/api-reference/#astrorewrite)
  */
 
 export const RewriteWithBodyUsed = {
@@ -1615,6 +1616,36 @@ export const ActionsWithoutServerOutputError = {
 	message:
 		'Actions enabled without setting a server build output. A server is required to create callable backend functions. To deploy routes to a server, add a server adapter to your astro config.',
 	hint: 'Learn about on-demand rendering: https://docs.astro.build/en/basics/rendering-modes/#on-demand-rendered',
+} satisfies ErrorData;
+
+/**
+ * @docs
+ * @see
+ * - [Actions RFC](https://github.com/withastro/roadmap/blob/actions/proposals/0046-actions.md)
+ * @description
+ * Action was called from a form using a GET request, but only POST requests are supported. This often occurs if `method="POST"` is missing on the form.
+ */
+export const ActionsUsedWithForGetError = {
+	name: 'ActionsUsedWithForGetError',
+	title: 'An invalid Action query string was passed by a form.',
+	message: (actionName: string) =>
+		`Action ${actionName} was called from a form using a GET request, but only POST requests are supported. This often occurs if \`method="POST"\` is missing on the form.`,
+	hint: 'Actions are experimental. Visit the RFC for usage instructions: https://github.com/withastro/roadmap/blob/actions/proposals/0046-actions.md',
+} satisfies ErrorData;
+
+/**
+ * @docs
+ * @see
+ * - [Actions RFC](https://github.com/withastro/roadmap/blob/actions/proposals/0046-actions.md)
+ * @description
+ * The server received the query string `?_astroAction=name`, but could not find an action with that name. Use the action function's `.queryString` property to retrieve the form `action` URL.
+ */
+export const ActionQueryStringInvalidError = {
+	name: 'ActionQueryStringInvalidError',
+	title: 'An invalid Action query string was passed by a form.',
+	message: (actionName: string) =>
+		`The server received the query string \`?_astroAction=${actionName}\`, but could not find an action with that name. If you changed an action's name in development, remove this query param from your URL and refresh.`,
+	hint: 'Actions are experimental. Visit the RFC for usage instructions: https://github.com/withastro/roadmap/blob/actions/proposals/0046-actions.md',
 } satisfies ErrorData;
 
 /**
