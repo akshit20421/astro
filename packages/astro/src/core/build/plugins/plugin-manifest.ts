@@ -12,6 +12,7 @@ import type {
 	SerializedRouteInfo,
 	SerializedSSRManifest,
 } from '../../app/types.js';
+import { encodeKey } from '../../encryption.js';
 import { fileExtension, joinPaths, prependForwardSlash } from '../../path.js';
 import { serializeRouteData } from '../../routing/index.js';
 import { addRollupInput } from '../add-rollup-input.js';
@@ -78,7 +79,7 @@ function vitePluginManifest(_options: StaticBuildOptions, internals: BuildIntern
 
 export function pluginManifest(
 	options: StaticBuildOptions,
-	internals: BuildInternals
+	internals: BuildInternals,
 ): AstroBuildPlugin {
 	return {
 		targets: ['server'],
@@ -115,7 +116,7 @@ export function pluginManifest(
 
 async function createManifest(
 	buildOpts: StaticBuildOptions,
-	internals: BuildInternals
+	internals: BuildInternals,
 ): Promise<SerializedSSRManifest> {
 	if (!internals.manifestEntryChunk) {
 		throw new Error(`Did not generate an entry chunk for SSR`);
@@ -125,14 +126,15 @@ async function createManifest(
 	const clientStatics = new Set(
 		await glob('**/*', {
 			cwd: fileURLToPath(buildOpts.settings.config.build.client),
-		})
+		}),
 	);
 	for (const file of clientStatics) {
 		internals.staticFiles.add(file);
 	}
 
 	const staticFiles = internals.staticFiles;
-	return buildManifest(buildOpts, internals, Array.from(staticFiles));
+	const encodedKey = await encodeKey(await buildOpts.key);
+	return buildManifest(buildOpts, internals, Array.from(staticFiles), encodedKey);
 }
 
 /**
@@ -149,7 +151,8 @@ function injectManifest(manifest: SerializedSSRManifest, chunk: Readonly<OutputC
 function buildManifest(
 	opts: StaticBuildOptions,
 	internals: BuildInternals,
-	staticFiles: string[]
+	staticFiles: string[],
+	encodedKey: string,
 ): SerializedSSRManifest {
 	const { settings } = opts;
 
@@ -197,7 +200,7 @@ function buildManifest(
 			scripts.unshift(
 				Object.assign({}, pageData.hoistedScript, {
 					value,
-				})
+				}),
 			);
 		}
 		if (settings.scripts.some((script) => script.stage === 'page')) {
@@ -277,6 +280,7 @@ function buildManifest(
 		buildFormat: settings.config.build.format,
 		checkOrigin: settings.config.security?.checkOrigin ?? false,
 		serverIslandNameMap: Array.from(settings.serverIslandNameMap),
+		key: encodedKey,
 		experimentalEnvGetSecretEnabled:
 			settings.config.experimental.env !== undefined &&
 			(settings.adapter?.supportedAstroFeatures.envGetSecret ?? 'unsupported') !== 'unsupported',

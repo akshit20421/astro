@@ -1,7 +1,6 @@
 import { getManagedAppTokenOrExit } from '@astrojs/studio';
 import type { AstroConfig } from 'astro';
 import { sql } from 'drizzle-orm';
-import type { Arguments } from 'yargs-parser';
 import {
 	createLocalDatabaseClient,
 	createRemoteDatabaseClient,
@@ -11,6 +10,7 @@ import { DB_PATH } from '../../../consts.js';
 import { SHELL_QUERY_MISSING_ERROR } from '../../../errors.js';
 import type { DBConfigInput } from '../../../types.js';
 import { getAstroEnv, getRemoteDatabaseUrl } from '../../../utils.js';
+import type { YargsArguments } from '../../types.js';
 
 export async function cmd({
 	flags,
@@ -18,7 +18,7 @@ export async function cmd({
 }: {
 	dbConfig: DBConfigInput;
 	astroConfig: AstroConfig;
-	flags: Arguments;
+	flags: YargsArguments;
 }) {
 	const query = flags.query;
 	if (!query) {
@@ -35,7 +35,7 @@ export async function cmd({
 		const { ASTRO_DATABASE_FILE } = getAstroEnv();
 		const dbUrl = normalizeDatabaseUrl(
 			ASTRO_DATABASE_FILE,
-			new URL(DB_PATH, astroConfig.root).href
+			new URL(DB_PATH, astroConfig.root).href,
 		);
 		const db = createLocalDatabaseClient({ dbUrl });
 		const result = await db.run(sql.raw(query));

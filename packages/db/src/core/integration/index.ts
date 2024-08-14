@@ -1,4 +1,5 @@
 import { existsSync } from 'fs';
+import { parseArgs } from 'node:util';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { type ManagedAppToken, getManagedAppTokenOrExit } from '@astrojs/studio';
@@ -14,7 +15,6 @@ import {
 	loadEnv,
 	mergeConfig,
 } from 'vite';
-import parseArgs from 'yargs-parser';
 import { AstroDbError } from '../../runtime/utils.js';
 import { CONFIG_FILE_NAMES, DB_PATH } from '../consts.js';
 import { EXEC_DEFAULT_EXPORT_ERROR, EXEC_ERROR } from '../errors.js';
@@ -22,7 +22,7 @@ import { resolveDbConfig } from '../load-file.js';
 import { SEED_DEV_FILE_NAME } from '../queries.js';
 import { type VitePlugin, getDbDirectoryUrl } from '../utils.js';
 import { fileURLIntegration } from './file-url.js';
-import { typegenInternal } from './typegen.js';
+import { getDtsContent } from './typegen.js';
 import {
 	type LateSeedFiles,
 	type LateTables,
@@ -30,7 +30,6 @@ import {
 	resolved,
 	vitePluginDb,
 } from './vite-plugin-db.js';
-import { vitePluginInjectEnvTs } from './vite-plugin-inject-env-ts.js';
 
 function astroDBIntegration(): AstroIntegration {
 	let connectToStudio = false;
@@ -72,8 +71,8 @@ function astroDBIntegration(): AstroIntegration {
 				if (command === 'preview') return;
 
 				let dbPlugin: VitePlugin | undefined = undefined;
-				const args = parseArgs(process.argv.slice(3));
-				connectToStudio = process.env.ASTRO_INTERNAL_TEST_REMOTE || args['remote'];
+				const args = parseArgs({ strict: false });
+				connectToStudio = !!process.env.ASTRO_INTERNAL_TEST_REMOTE || !!args.values.remote;
 
 				if (connectToStudio) {
 					appToken = await getManagedAppTokenOrExit();
@@ -102,11 +101,11 @@ function astroDBIntegration(): AstroIntegration {
 				updateConfig({
 					vite: {
 						assetsInclude: [DB_PATH],
-						plugins: [dbPlugin, vitePluginInjectEnvTs(config, logger)],
+						plugins: [dbPlugin],
 					},
 				});
 			},
-			'astro:config:done': async ({ config }) => {
+			'astro:config:done': async ({ config, injectTypes }) => {
 				if (command === 'preview') return;
 
 				// TODO: refine where we load tables
@@ -122,7 +121,10 @@ function astroDBIntegration(): AstroIntegration {
 					await writeFile(localDbUrl, '');
 				}
 
-				await typegenInternal({ tables: tables.get() ?? {}, root: config.root });
+				injectTypes({
+					filename: 'db.d.ts',
+					content: getDtsContent(tables.get() ?? {}),
+				});
 			},
 			'astro:server:setup': async ({ server, logger }) => {
 				seedHandler.execute = async (fileUrl) => {
@@ -141,12 +143,12 @@ function astroDBIntegration(): AstroIntegration {
 				// Wait for dev server log before showing "connected".
 				setTimeout(() => {
 					logger.info(
-						connectToStudio ? 'Connected to remote database.' : 'New local database created.'
+						connectToStudio ? 'Connected to remote database.' : 'New local database created.',
 					);
 					if (connectToStudio) return;
 
 					const localSeedPaths = SEED_DEV_FILE_NAME.map(
-						(name) => new URL(name, getDbDirectoryUrl(root))
+						(name) => new URL(name, getDbDirectoryUrl(root)),
 					);
 					// Eager load astro:db module on startup
 					if (seedFiles.get().length || localSeedPaths.find((path) => existsSync(path))) {
@@ -224,7 +226,7 @@ async function getTempViteServer({ viteConfig }: { viteConfig: UserConfig }) {
 			optimizeDeps: { noDiscovery: true },
 			ssr: { external: [] },
 			logLevel: 'silent',
-		})
+		}),
 	);
 
 	const hotSend = tempViteServer.hot.send;

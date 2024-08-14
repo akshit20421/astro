@@ -69,14 +69,15 @@ export async function generatePages(options: StaticBuildOptions, internals: Buil
 			// middleware.mjs is not emitted if there is no user middleware
 			// in which case the import fails with ERR_MODULE_NOT_FOUND, and we fall back to a no-op middleware
 			middleware = await import(new URL('middleware.mjs', baseDirectory).toString()).then(
-				(mod) => mod.onRequest
+				(mod) => mod.onRequest,
 			);
 		} catch {}
 		manifest = createBuildManifest(
 			options.settings,
 			internals,
 			renderers.renderers as SSRLoadedRenderer[],
-			middleware
+			middleware,
+			options.key,
 		);
 	}
 	const pipeline = BuildPipeline.create({ internals, manifest, options });
@@ -118,7 +119,7 @@ export async function generatePages(options: StaticBuildOptions, internals: Buil
 					} else {
 						const ssrEntryURLPage = createEntryURL(filePath, outFolder);
 						throw new Error(
-							`Unable to find the manifest for the module ${ssrEntryURLPage.toString()}. This is unexpected and likely a bug in Astro, please report.`
+							`Unable to find the manifest for the module ${ssrEntryURLPage.toString()}. This is unexpected and likely a bug in Astro, please report.`,
 						);
 					}
 				} else {
@@ -135,7 +136,7 @@ export async function generatePages(options: StaticBuildOptions, internals: Buil
 	}
 	logger.info(
 		null,
-		green(`✓ Completed in ${getTimeStat(generatePagesTimer, performance.now())}.\n`)
+		green(`✓ Completed in ${getTimeStat(generatePagesTimer, performance.now())}.\n`),
 	);
 
 	const staticImageList = getStaticImageList();
@@ -170,7 +171,7 @@ async function generatePage(
 	pageData: PageBuildData,
 	ssrEntry: SinglePageBuiltModule,
 	builtPaths: Set<string>,
-	pipeline: BuildPipeline
+	pipeline: BuildPipeline,
 ) {
 	// prepare information we need
 	const { config, logger } = pipeline;
@@ -186,7 +187,7 @@ async function generatePage(
 	const scripts = pageData.hoistedScript ?? null;
 	if (!pageModulePromise) {
 		throw new Error(
-			`Unable to find the module for ${pageData.component}. This is unexpected and likely a bug in Astro, please report.`
+			`Unable to find the module for ${pageData.component}. This is unexpected and likely a bug in Astro, please report.`,
 		);
 	}
 	const pageModule = await pageModulePromise();
@@ -241,7 +242,7 @@ async function getPathsForRoute(
 	route: RouteData,
 	mod: ComponentInstance,
 	pipeline: BuildPipeline,
-	builtPaths: Set<string>
+	builtPaths: Set<string>,
 ): Promise<Array<string>> {
 	const { logger, options, routeCache, serverLike } = pipeline;
 	let paths: Array<string> = [];
@@ -263,7 +264,7 @@ async function getPathsForRoute(
 		const label = staticPaths.length === 1 ? 'page' : 'pages';
 		logger.debug(
 			'build',
-			`├── ${bold(green('√'))} ${route.component} → ${magenta(`[${staticPaths.length} ${label}]`)}`
+			`├── ${bold(green('√'))} ${route.component} → ${magenta(`[${staticPaths.length} ${label}]`)}`,
 		);
 
 		paths = staticPaths
@@ -304,7 +305,7 @@ async function getPathsForRoute(
 function getInvalidRouteSegmentError(
 	e: TypeError,
 	route: RouteData,
-	staticPath: GetStaticPathsItem
+	staticPath: GetStaticPathsItem,
 ): AstroError {
 	const invalidParam = /^Expected "([^"]+)"/.exec(e.message)?.[1];
 	const received = invalidParam ? staticPath.params[invalidParam] : undefined;
@@ -312,7 +313,7 @@ function getInvalidRouteSegmentError(
 		'Learn about dynamic routes at https://docs.astro.build/en/core-concepts/routing/#dynamic-routes';
 	if (invalidParam && typeof received === 'string') {
 		const matchingSegment = route.segments.find(
-			(segment) => segment[0]?.content === invalidParam
+			(segment) => segment[0]?.content === invalidParam,
 		)?.[0];
 		const mightBeMissingSpread = matchingSegment?.dynamic && !matchingSegment?.spread;
 		if (mightBeMissingSpread) {
@@ -325,7 +326,7 @@ function getInvalidRouteSegmentError(
 			? AstroErrorData.InvalidDynamicRoute.message(
 					route.route,
 					JSON.stringify(invalidParam),
-					JSON.stringify(received)
+					JSON.stringify(received),
 				)
 			: `Generated path for ${route.route} is invalid.`,
 		hint,
@@ -355,7 +356,7 @@ function getUrlForPath(
 	origin: string,
 	format: AstroConfig['build']['format'],
 	trailingSlash: AstroConfig['trailingSlash'],
-	routeType: RouteType
+	routeType: RouteType,
 ): URL {
 	/**
 	 * Examples:
@@ -402,7 +403,7 @@ async function generatePath(
 	pathname: string,
 	pipeline: BuildPipeline,
 	gopts: GeneratePathOptions,
-	route: RouteData
+	route: RouteData,
 ) {
 	const { mod } = gopts;
 	const { config, logger, options } = pipeline;
@@ -432,7 +433,7 @@ async function generatePath(
 		options.origin,
 		config.build.format,
 		config.trailingSlash,
-		route.type
+		route.type,
 	);
 
 	const request = createRequest({
@@ -520,7 +521,8 @@ function createBuildManifest(
 	settings: AstroSettings,
 	internals: BuildInternals,
 	renderers: SSRLoadedRenderer[],
-	middleware: MiddlewareHandler
+	middleware: MiddlewareHandler,
+	key: Promise<CryptoKey>,
 ): SSRManifest {
 	let i18nManifest: SSRManifestI18n | undefined = undefined;
 	if (settings.config.i18n) {
@@ -551,6 +553,7 @@ function createBuildManifest(
 		buildFormat: settings.config.build.format,
 		middleware,
 		checkOrigin: settings.config.security?.checkOrigin ?? false,
+		key,
 		experimentalEnvGetSecretEnabled: false,
 	};
 }

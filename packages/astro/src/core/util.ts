@@ -55,7 +55,7 @@ export function getOutputFilename(astroConfig: AstroConfig, name: string, type: 
 
 /** is a specifier an npm package? */
 export function parseNpmName(
-	spec: string
+	spec: string,
 ): { scope?: string; name: string; subpath?: string } | undefined {
 	// not an npm package
 	if (!spec || spec[0] === '.' || spec[0] === '/') return undefined;
@@ -153,7 +153,7 @@ export function isPage(file: URL, settings: AstroSettings): boolean {
 export function isEndpoint(file: URL, settings: AstroSettings): boolean {
 	if (!isInPagesDir(file, settings.config)) return false;
 	if (!isPublicRoute(file, settings.config)) return false;
-	return !endsWithPageExt(file, settings);
+	return !endsWithPageExt(file, settings) && !file.toString().includes('?astro');
 }
 
 export function isServerLikeOutput(config: AstroConfig) {
