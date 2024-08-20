@@ -2057,7 +2057,7 @@ export interface AstroUserConfig {
 		 *
 		 * **Note:** Secret client variables are not supported because there is no safe way to send this data to the client. Therefore, it is not possible to configure both `context: "client"` and `access: "secret"` in your schema.
 		 *
-		 * For a complete overview, and to give feedback on this experimental API, see the [Astro Env RFC](https://github.com/withastro/roadmap/blob/feat/astro-env-rfc/proposals/0046-astro-env.md).
+		 * For a complete overview, and to give feedback on this experimental API, see the [Astro Env RFC](https://github.com/withastro/roadmap/blob/main/proposals/0049-astro-env.md).
 		 */
 		env?: {
 			/**
@@ -2359,8 +2359,8 @@ export interface AstroUserConfig {
 		 *
 		 *     const blog = defineCollection({
 		 *       // For content layer you no longer define a `type`
-		 *      type: 'content',
-		 *      loader: glob({ pattern: '**\/[^_]*.md', base: "./src/data/blog" }),
+		 *       type: 'content',
+		 *       loader: glob({ pattern: '**\/[^_]*.md', base: "./src/data/blog" }),
 		 *       schema: z.object({
 		 *         title: z.string(),
 		 *         description: z.string(),
@@ -2391,13 +2391,13 @@ export interface AstroUserConfig {
 		 *     ```astro ins={4,9} del={3,8}
 		 *     // src/pages/index.astro
 		 *     ---
-		 *      import { getEntry } from 'astro:content';
-		 *      import { getEntry, render } from 'astro:content';
+		 *     import { getEntry } from 'astro:content';
+		 *     import { getEntry, render } from 'astro:content';
 		 *
-		 *       const post = await getEntry('blog', params.slug);
+		 *     const post = await getEntry('blog', params.slug);
 		 *
-		 *      const { Content, headings } = await post.render();
-		 *      const { Content, headings } = await render(post);
+		 *     const { Content, headings } = await post.render();
+		 *     const { Content, headings } = await render(post);
 		 *     ---
 		 *
 		 *     <Content />
