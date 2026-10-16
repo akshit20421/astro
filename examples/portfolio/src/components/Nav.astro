@@ -1,7 +1,7 @@
 ---
 import Icon from './Icon.astro';
-import ThemeToggle from './ThemeToggle.astro';
 import type { iconPaths } from './IconPaths';
+import ThemeToggle from './ThemeToggle.astro';
 
 /** Main menu items */
 const textLinks: { label: string; href: string }[] = [
@@ -19,6 +19,14 @@ const iconLinks: { label: string; href: string; icon: keyof typeof iconPaths }[]
 	{ label: 'dribbble', href: 'https://dribbble.com/me', icon: 'dribbble-logo' },
 	{ label: 'YouTube', href: 'https://www.youtube.com/@me/', icon: 'youtube-logo' },
 ];
+
+/** Test if a link is pointing to the current page. */
+const isCurrentPage = (href: string) => {
+	let pathname = Astro.url.pathname.replace(import.meta.env.BASE_URL, '');
+	if (pathname.at(0) !== '/') pathname = '/' + pathname;
+	if (pathname.at(-1) !== '/') pathname += '/';
+	return pathname === href || (href !== '/' && pathname.startsWith(href));
+};
 ---
 
 <nav>
@@ -38,75 +46,45 @@ const iconLinks: { label: string; href: string; icon: keyof typeof iconPaths }[]
 	</div>
 	<noscript>
 		<ul class="nav-items">
-			{
-				textLinks.map(({ label, href }) => (
-					<li>
-						<a
-							aria-current={Astro.url.pathname === href}
-							class:list={[
-								'link',
-								{
-									active:
-										Astro.url.pathname === href ||
-										(href !== '/' && Astro.url.pathname.startsWith(href)),
-								},
-							]}
-							href={href}
-						>
-							{label}
-						</a>
-					</li>
-				))
-			}
+			{textLinks.map(({ label, href }) => (
+				<li>
+					<a aria-current={isCurrentPage(href) ? 'page' : null} class="link" href={href}>
+						{label}
+					</a>
+				</li>
+			))}
 		</ul>
 	</noscript>
 	<noscript>
 		<div class="menu-footer">
 			<div class="socials">
-				{
-					iconLinks.map(({ href, icon, label }) => (
-						<a href={href} class="social">
-							<span class="sr-only">{label}</span>
-							<Icon icon={icon} />
-						</a>
-					))
-				}
+				{iconLinks.map(({ href, icon, label }) => (
+					<a href={href} class="social">
+						<span class="sr-only">{label}</span>
+						<Icon icon={icon} />
+					</a>
+				))}
 			</div>
 		</div>
 	</noscript>
 	<div id="menu-content" hidden>
 		<ul class="nav-items">
-			{
-				textLinks.map(({ label, href }) => (
-					<li>
-						<a
-							aria-current={Astro.url.pathname === href}
-							class:list={[
-								'link',
-								{
-									active:
-										Astro.url.pathname === href ||
-										(href !== '/' && Astro.url.pathname.startsWith(href)),
-								},
-							]}
-							href={href}
-						>
-							{label}
-						</a>
-					</li>
-				))
-			}
+			{textLinks.map(({ label, href }) => (
+				<li>
+					<a aria-current={isCurrentPage(href) ? 'page' : null} class="link" href={href}>
+						{label}
+					</a>
+				</li>
+			))}
 		</ul>
 		<div class="menu-footer">
 			<div class="socials">
-				{
-					iconLinks.map(({ href, icon, label }) => (
-						<a href={href} class="social">
-							<span class="sr-only">{label}</span>
-							<Icon icon={icon} />
-						</a>
-					))
-				}
+				{iconLinks.map(({ href, icon, label }) => (
+					<a href={href} class="social">
+						<span class="sr-only">{label}</span>
+						<Icon icon={icon} />
+					</a>
+				))}
 			</div>
 
 			<div class="theme-toggle">
@@ -138,7 +116,7 @@ const iconLinks: { label: string; href: string; icon: keyof typeof iconPaths }[]
 			};
 
 			// Toggle menu visibility when the menu button is clicked.
-			btn.addEventListener('click', () => setExpanded(menu.hidden));
+			btn.addEventListener('click', () => setExpanded(menu.hidden === true));
 
 			// Hide menu button for large screens.
 			const handleViewports = (e: MediaQueryList | MediaQueryListEvent) => {
@@ -192,7 +170,8 @@ const iconLinks: { label: string; href: string; icon: keyof typeof iconPaths }[]
 
 	.menu-button[aria-expanded='true'] {
 		color: var(--gray-0);
-		background: linear-gradient(180deg, var(--gray-600), transparent),
+		background:
+			linear-gradient(180deg, var(--gray-600), transparent),
 			radial-gradient(var(--gray-900), var(--gray-800) 150%);
 	}
 
@@ -234,7 +213,7 @@ const iconLinks: { label: string; href: string; icon: keyof typeof iconPaths }[]
 		text-decoration: none;
 	}
 
-	.link.active {
+	.link[aria-current] {
 		color: var(--gray-0);
 	}
 
@@ -332,7 +311,7 @@ const iconLinks: { label: string; href: string; icon: keyof typeof iconPaths }[]
 			background-color: var(--accent-subtle-overlay);
 		}
 
-		.link.active {
+		.link[aria-current='page'] {
 			color: var(--accent-text-over);
 			background-color: var(--accent-regular);
 		}
@@ -360,7 +339,7 @@ const iconLinks: { label: string; href: string; icon: keyof typeof iconPaths }[]
 		}
 	}
 	@media (forced-colors: active) {
-		.link.active {
+		.link[aria-current='page'] {
 			color: SelectedItem;
 		}
 	}

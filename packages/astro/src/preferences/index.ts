@@ -1,12 +1,9 @@
-import type { AstroConfig } from '../@types/astro.js';
-
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-
-import dget from 'dlv';
 import { DEFAULT_PREFERENCES, type Preferences, type PublicPreferences } from './defaults.js';
+import dget from './dlv.js';
 import { PreferenceStore } from './store.js';
 
 type DotKeys<T> = T extends object
@@ -17,13 +14,13 @@ type DotKeys<T> = T extends object
 		}[keyof T]
 	: never;
 
-export type GetDotKey<
+type GetDotKey<
 	T extends Record<string | number, any>,
 	K extends string,
 > = K extends `${infer U}.${infer Rest}` ? GetDotKey<T[U], Rest> : T[K];
 
-export type PreferenceLocation = 'global' | 'project';
-export interface PreferenceOptions {
+type PreferenceLocation = 'global' | 'project';
+interface PreferenceOptions {
 	location?: PreferenceLocation;
 	/**
 	 * If `true`, the server will be reloaded after setting the preference.
@@ -41,7 +38,7 @@ type DeepPartial<T> = T extends object
 	: T;
 
 export type PreferenceKey = DotKeys<Preferences>;
-export interface PreferenceList extends Record<PreferenceLocation, DeepPartial<PublicPreferences>> {
+interface PreferenceList extends Record<PreferenceLocation, DeepPartial<PublicPreferences>> {
 	fromAstroConfig: DeepPartial<Preferences>;
 	defaults: PublicPreferences;
 }
@@ -66,6 +63,7 @@ export function isValidKey(key: string): key is PreferenceKey {
 }
 export function coerce(key: string, value: unknown) {
 	const type = typeof dget(DEFAULT_PREFERENCES, key);
+	// eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
 	switch (type) {
 		case 'string':
 			return value;
@@ -82,7 +80,10 @@ export function coerce(key: string, value: unknown) {
 	return value as any;
 }
 
-export default function createPreferences(config: AstroConfig, dotAstroDir: URL): AstroPreferences {
+export default function createPreferences(
+	config: Record<string, any>,
+	dotAstroDir: URL,
+): AstroPreferences {
 	const global = new PreferenceStore(getGlobalPreferenceDir());
 	const project = new PreferenceStore(fileURLToPath(dotAstroDir));
 	const stores: Record<PreferenceLocation, PreferenceStore> = { global, project };
@@ -143,6 +144,7 @@ function getGlobalPreferenceDir() {
 		const { XDG_CONFIG_HOME = path.join(homedir, '.config') } = process.env;
 		return path.join(XDG_CONFIG_HOME, name);
 	};
+	// eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
 	switch (process.platform) {
 		case 'darwin':
 			return macos();

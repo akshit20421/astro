@@ -1,10 +1,10 @@
+import { createHash } from 'node:crypto';
 import nodeFs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import glob from 'fast-glob';
 import * as vite from 'vite';
+import type { CrawlFrameworkPkgsResult } from 'vitefu';
 import { crawlFrameworkPkgs } from 'vitefu';
-import type { AstroSettings } from '../@types/astro.js';
-import { vitePluginActions, vitePluginUserActions } from '../actions/plugins.js';
+import { vitePluginActions } from '../actions/vite-plugin-actions.js';
 import { getAssetsPrefix } from '../assets/utils/getAssetsPrefix.js';
 import astroAssetsPlugin from '../assets/vite-plugin-assets.js';
 import astroContainer from '../container/vite-plugin-container.js';
@@ -13,153 +13,232 @@ import {
 	astroContentImportPlugin,
 	astroContentVirtualModPlugin,
 } from '../content/index.js';
+import { createEnvLoader } from '../env/env-loader.js';
+import { validateEnvPrefixAgainstSchema } from '../env/validators.js';
 import { astroEnv } from '../env/vite-plugin-env.js';
+import { importMetaEnv } from '../env/vite-plugin-import-meta-env.js';
 import astroInternationalization from '../i18n/vite-plugin-i18n.js';
+import { serializedManifestPlugin } from '../manifest/serialized.js';
+import astroVirtualManifestPlugin from '../manifest/virtual-module.js';
 import astroPrefetch from '../prefetch/vite-plugin-prefetch.js';
 import astroDevToolbar from '../toolbar/vite-plugin-dev-toolbar.js';
 import astroTransitions from '../transitions/vite-plugin-transitions.js';
-import astroPostprocessVitePlugin from '../vite-plugin-astro-postprocess/index.js';
-import { vitePluginAstroServer } from '../vite-plugin-astro-server/index.js';
+import type { AstroSettings, RoutesList } from '../types/astro.js';
+import { vitePluginAdapterConfig } from '../vite-plugin-adapter-config/index.js';
+import { vitePluginApp } from '../vite-plugin-app/index.js';
+import { vitePluginFetchable } from './fetch/vite-plugin.js';
 import astroVitePlugin from '../vite-plugin-astro/index.js';
+import { vitePluginAstroServer } from '../vite-plugin-astro-server/index.js';
 import configAliasVitePlugin from '../vite-plugin-config-alias/index.js';
-import envVitePlugin from '../vite-plugin-env/index.js';
+import { astroDevCssPlugin } from '../vite-plugin-css/index.js';
 import vitePluginFileURL from '../vite-plugin-fileurl/index.js';
 import astroHeadPlugin from '../vite-plugin-head/index.js';
+import astroHmrReloadPlugin from '../vite-plugin-hmr-reload/index.js';
 import htmlVitePlugin from '../vite-plugin-html/index.js';
 import astroIntegrationsContainerPlugin from '../vite-plugin-integrations-container/index.js';
 import astroLoadFallbackPlugin from '../vite-plugin-load-fallback/index.js';
 import markdownVitePlugin from '../vite-plugin-markdown/index.js';
-import mdxVitePlugin from '../vite-plugin-mdx/index.js';
-import astroScannerPlugin from '../vite-plugin-scanner/index.js';
+import { pluginPage, pluginPages } from '../vite-plugin-pages/index.js';
+import vitePluginRenderers from '../vite-plugin-renderers/index.js';
+import astroPluginRoutes from '../vite-plugin-routes/index.js';
+import vitePluginStaticPaths from '../vite-plugin-static-paths/index.js';
 import astroScriptsPlugin from '../vite-plugin-scripts/index.js';
 import astroScriptsPageSSRPlugin from '../vite-plugin-scripts/page-ssr.js';
-import { vitePluginSSRManifest } from '../vite-plugin-ssr-manifest/index.js';
-import type { Logger } from './logger/core.js';
+import type { AstroLogger } from './logger/core.js';
 import { createViteLogger } from './logger/vite.js';
 import { vitePluginMiddleware } from './middleware/vite-plugin.js';
 import { joinPaths } from './path.js';
+import { ServerIslandsState } from './server-islands/shared-state.js';
 import { vitePluginServerIslands } from './server-islands/vite-plugin-server-islands.js';
-import { isObject } from './util.js';
+import { vitePluginCacheProvider } from './cache/vite-plugin.js';
+import { vitePluginSessionDriver, vitePluginSessionProvider } from './session/vite-plugin.js';
+import { vitePluginLogger } from './logger/vite-plugin.js';
+import { isObject } from './util-runtime.js';
+import { vitePluginEnvironment } from '../vite-plugin-environment/index.js';
+import { ASTRO_VITE_ENVIRONMENT_NAMES } from './constants.js';
+import { vitePluginChromedevtools } from '../vite-plugin-chromedevtools/index.js';
+import { vitePluginDevStatus } from '../vite-plugin-dev-status/index.js';
+import { vitePluginAstroServerClient } from '../vite-plugin-overlay/index.js';
 
-interface CreateViteOptions {
+type CreateViteOptions = {
 	settings: AstroSettings;
-	logger: Logger;
-	mode: 'dev' | 'build' | string;
-	// will be undefined when using `getViteConfig`
-	command?: 'dev' | 'build';
+	logger: AstroLogger;
+	mode: string;
 	fs?: typeof nodeFs;
+	routesList: RoutesList;
 	sync: boolean;
+} & (
+	| {
+			command: 'dev';
+	  }
+	| {
+			command: 'build';
+	  }
+);
+
+// In-process cache for crawlFrameworkPkgs results. The crawl walks the entire
+// node_modules tree reading package.json files, which is expensive and produces
+// the same result for a given (root, isBuild) pair within a single process lifetime.
+const _crawlCache = new Map<string, CrawlFrameworkPkgsResult>();
+
+function cloneCrawlResult(result: CrawlFrameworkPkgsResult): CrawlFrameworkPkgsResult {
+	return {
+		optimizeDeps: {
+			include: [...result.optimizeDeps.include],
+			exclude: [...result.optimizeDeps.exclude],
+		},
+		ssr: {
+			noExternal: [...result.ssr.noExternal],
+			external: [...result.ssr.external],
+		},
+	};
 }
 
-const ALWAYS_NOEXTERNAL = [
-	// This is only because Vite's native ESM doesn't resolve "exports" correctly.
-	'astro',
-	// Vite fails on nested `.astro` imports without bundling
-	'astro/components',
-	// Handle recommended nanostores. Only @nanostores/preact is required from our testing!
-	// Full explanation and related bug report: https://github.com/withastro/astro/pull/3667
-	'@nanostores/preact',
-	// fontsource packages are CSS that need to be processed
-	'@fontsource/*',
-];
-
-// These specifiers are usually dependencies written in CJS, but loaded through Vite's transform
-// pipeline, which Vite doesn't support in development time. This hardcoded list temporarily
-// fixes things until Vite can properly handle them, or when they support ESM.
-const ONLY_DEV_EXTERNAL = [
-	// Imported by `@astrojs/prism` which exposes `<Prism/>` that is processed by Vite
-	'prismjs/components/index.js',
-	// Imported by `astro/assets` -> `packages/astro/src/core/logger/core.ts`
-	'string-width',
-	// Imported by `astro:transitions` -> packages/astro/src/runtime/server/transition.ts
-	'cssesc',
-];
+/**
+ * Clear the crawlFrameworkPkgs cache. Call this when node_modules may have
+ * changed (e.g. after a dev server restart triggered by config/lockfile change).
+ */
+export function clearCrawlCache(): void {
+	_crawlCache.clear();
+}
 
 /** Return a base vite config as a common starting point for all Vite commands. */
 export async function createVite(
 	commandConfig: vite.InlineConfig,
-	{ settings, logger, mode, command, fs = nodeFs, sync }: CreateViteOptions,
+	{ settings, logger, mode, command, fs = nodeFs, sync, routesList }: CreateViteOptions,
 ): Promise<vite.InlineConfig> {
-	const astroPkgsConfig = await crawlFrameworkPkgs({
-		root: fileURLToPath(settings.config.root),
-		isBuild: mode === 'build',
-		viteUserConfig: settings.config.vite,
-		isFrameworkPkgByJson(pkgJson) {
-			// Certain packages will trigger the checks below, but need to be external. A common example are SSR adapters
-			// for node-based platforms, as we need to control the order of the import paths to make sure polyfills are applied in time.
-			if (pkgJson?.astro?.external === true) {
-				return false;
-			}
+	const root = fileURLToPath(settings.config.root);
+	const isBuild = command === 'build';
+	const crawlCacheKey = `${root}:${isBuild}`;
 
-			return (
-				// Attempt: package relies on `astro`. ✅ Definitely an Astro package
-				pkgJson.peerDependencies?.astro ||
-				pkgJson.dependencies?.astro ||
-				// Attempt: package is tagged with `astro` or `astro-component`. ✅ Likely a community package
-				pkgJson.keywords?.includes('astro') ||
-				pkgJson.keywords?.includes('astro-component') ||
-				// Attempt: package is named `astro-something` or `@scope/astro-something`. ✅ Likely a community package
-				/^(?:@[^/]+\/)?astro-/.test(pkgJson.name)
-			);
-		},
-		isFrameworkPkgByName(pkgName) {
-			const isNotAstroPkg = isCommonNotAstro(pkgName);
-			if (isNotAstroPkg) {
-				return false;
-			} else {
-				return undefined;
-			}
-		},
+	let astroPkgsConfig = _crawlCache.get(crawlCacheKey);
+	if (!astroPkgsConfig) {
+		astroPkgsConfig = await crawlFrameworkPkgs({
+			root,
+			isBuild,
+			viteUserConfig: settings.config.vite,
+			isFrameworkPkgByJson(pkgJson) {
+				// Certain packages will trigger the checks below, but need to be external. A common example are SSR adapters
+				// for node-based platforms, as we need to control the order of the import paths to make sure polyfills are applied in time.
+				if (pkgJson?.astro?.external === true) {
+					return false;
+				}
+
+				return (
+					// Attempt: package relies on `astro`. ✅ Definitely an Astro package
+					pkgJson.peerDependencies?.astro ||
+					pkgJson.dependencies?.astro ||
+					// Attempt: package is tagged with `astro` or `astro-component`. ✅ Likely a community package
+					pkgJson.keywords?.includes('astro') ||
+					pkgJson.keywords?.includes('astro-component') ||
+					// Attempt: package is named `astro-something` or `@scope/astro-something`. ✅ Likely a community package
+					/^(?:@[^/]+\/)?astro-/.test(pkgJson.name)
+				);
+			},
+			isFrameworkPkgByName(pkgName) {
+				const isNotAstroPkg = isCommonNotAstro(pkgName);
+				if (isNotAstroPkg) {
+					return false;
+				} else {
+					return undefined;
+				}
+			},
+		});
+		_crawlCache.set(crawlCacheKey, astroPkgsConfig);
+	}
+
+	// Return a clone so consumers can't mutate the cached result
+	astroPkgsConfig = cloneCrawlResult(astroPkgsConfig);
+
+	const envLoader = createEnvLoader({
+		mode,
+		config: settings.config,
 	});
+	const serverIslandsState = new ServerIslandsState();
+	// Shared cache of CSS content by module ID. Populated by the dev-css plugin's
+	// transform hook and consumed by the content asset propagation plugin to avoid
+	// re-processing CSS modules with `?inline` (which produces different
+	// scoped-name hashes with Lightning CSS).
+	const cssContentCache = new Map<string, string>();
 
-	const srcDirPattern = glob.convertPathToPattern(fileURLToPath(settings.config.srcDir));
+	// Validate that envPrefix doesn't conflict with secret env schema variables
+	validateEnvPrefixAgainstSchema(settings.config);
 
 	// Start with the Vite configuration that Astro core needs
 	const commonConfig: vite.InlineConfig = {
 		// Tell Vite not to combine config from vite.config.js with our provided inline config
 		configFile: false,
+		mode,
 		cacheDir: fileURLToPath(new URL('./node_modules/.vite/', settings.config.root)), // using local caches allows Astro to be used in monorepos, etc.
 		clearScreen: false, // we want to control the output, not Vite
 		customLogger: createViteLogger(logger, settings.config.vite.logLevel),
 		appType: 'custom',
-		optimizeDeps: {
-			// Scan for component code within `srcDir`
-			entries: [`${srcDirPattern}**/*.{jsx,tsx,vue,svelte,html,astro}`],
-			exclude: ['astro', 'node-fetch'],
-		},
 		plugins: [
+			// Raise the watcher's maxListeners limit before any other plugin's
+			// configureServer hook can add listeners. Astro registers 12+ change
+			// listeners across its built-in Vite plugins, easily exceeding
+			// Node's default limit of 10.
+			{
+				name: 'astro:watcher-max-listeners',
+				configureServer(server) {
+					const current = server.watcher.getMaxListeners();
+					if (current !== 0 && current < 50) {
+						server.watcher.setMaxListeners(50);
+					}
+				},
+			},
+			serializedManifestPlugin({ settings, command, sync }),
+			vitePluginRenderers({
+				settings,
+				routesList,
+				serverIslandsState,
+				command: command === 'dev' ? 'serve' : 'build',
+			}),
+			vitePluginStaticPaths(),
+			await astroPluginRoutes({ routesList, settings, logger, fsMod: fs, command }),
+			astroVirtualManifestPlugin({ settings }),
+			vitePluginEnvironment({ settings, astroPkgsConfig, command }),
+			pluginPage({ routesList }),
+			pluginPages({ routesList }),
 			configAliasVitePlugin({ settings }),
 			astroLoadFallbackPlugin({ fs, root: settings.config.root }),
 			astroVitePlugin({ settings, logger }),
 			astroScriptsPlugin({ settings }),
 			// The server plugin is for dev only and having it run during the build causes
 			// the build to run very slow as the filewatcher is triggered often.
-			mode !== 'build' && vitePluginAstroServer({ settings, logger, fs }),
-			envVitePlugin({ settings, logger }),
-			astroEnv({ settings, mode, fs, sync }),
+			vitePluginApp(),
+			vitePluginFetchable({ settings }),
+			command === 'dev' && vitePluginAstroServer({ settings, logger }),
+			command === 'dev' && vitePluginAstroServerClient(),
+			astroDevCssPlugin({ routesList, command, cssContentCache }),
+			importMetaEnv({ envLoader }),
+			astroEnv({ settings, sync, envLoader }),
+			vitePluginAdapterConfig(settings),
 			markdownVitePlugin({ settings, logger }),
 			htmlVitePlugin(),
-			mdxVitePlugin(),
-			astroPostprocessVitePlugin(),
 			astroIntegrationsContainerPlugin({ settings, logger }),
 			astroScriptsPageSSRPlugin({ settings }),
 			astroHeadPlugin(),
-			astroScannerPlugin({ settings, logger }),
 			astroContentVirtualModPlugin({ fs, settings }),
 			astroContentImportPlugin({ fs, settings, logger }),
-			astroContentAssetPropagationPlugin({ mode, settings }),
+			astroContentAssetPropagationPlugin({ settings, cssContentCache }),
 			vitePluginMiddleware({ settings }),
-			vitePluginSSRManifest(),
-			astroAssetsPlugin({ settings, logger, mode }),
+			astroAssetsPlugin({ fs, settings, sync, logger }),
 			astroPrefetch({ settings }),
 			astroTransitions({ settings }),
 			astroDevToolbar({ settings, logger }),
 			vitePluginFileURL(),
 			astroInternationalization({ settings }),
 			vitePluginActions({ fs, settings }),
-			vitePluginUserActions({ settings }),
-			settings.config.experimental.serverIslands && vitePluginServerIslands({ settings }),
+			vitePluginServerIslands({ settings, logger, serverIslandsState }),
+			vitePluginSessionDriver({ settings }),
+			vitePluginSessionProvider({ settings }),
+			vitePluginCacheProvider({ settings }),
+			vitePluginLogger({ settings }),
 			astroContainer(),
+			astroHmrReloadPlugin(),
+			vitePluginChromedevtools({ settings }),
+			command === 'dev' && vitePluginDevStatus(),
 		],
 		publicDir: fileURLToPath(settings.config.publicDir),
 		root: fileURLToPath(settings.config.root),
@@ -176,10 +255,12 @@ export async function createVite(
 					: undefined, // disable HMR for test
 			watch: {
 				// Prevent watching during the build to speed it up
-				ignored: mode === 'build' ? ['**'] : undefined,
+				ignored: command === 'build' ? ['**'] : undefined,
 			},
 		},
 		resolve: {
+			// Vite's native tsconfig path resolution; see configAliasVitePlugin for the deprecated fallback.
+			tsconfigPaths: true,
 			alias: [
 				{
 					// This is needed for Deno compatibility, as the non-browser version
@@ -190,12 +271,13 @@ export async function createVite(
 				{
 					// Typings are imported from 'astro' (e.g. import { Type } from 'astro')
 					find: /^astro$/,
-					replacement: fileURLToPath(new URL('../@types/astro.js', import.meta.url)),
+					replacement: fileURLToPath(new URL('../types/public/index.js', import.meta.url)),
 				},
 				{
 					find: 'astro:middleware',
 					replacement: 'astro/virtual-modules/middleware.js',
 				},
+				// TODO: remove in Astro 8
 				{
 					find: 'astro:schema',
 					replacement: 'astro/zod',
@@ -205,19 +287,36 @@ export async function createVite(
 					replacement: 'astro/components',
 				},
 			],
-			conditions: ['astro'],
-			// Astro imports in third-party packages should use the same version as root
-			dedupe: ['astro'],
-		},
-		ssr: {
-			noExternal: [...ALWAYS_NOEXTERNAL, ...astroPkgsConfig.ssr.noExternal],
-			external: [...(mode === 'dev' ? ONLY_DEV_EXTERNAL : []), ...astroPkgsConfig.ssr.external],
 		},
 		build: { assetsDir: settings.config.build.assets },
+		css: !isBuild
+			? {
+					modules: {
+						// Vite's default postcss-modules scoped-name generator hashes the CSS
+						// *content*, so every declaration edit changes class names. In dev this
+						// breaks HMR for server-rendered HTML because the DOM still references
+						// the previous names. Use a path-based hash instead so selectors stay
+						// stable and Vite's CSS HMR can swap rules without a full page reload.
+						generateScopedName(name, filename) {
+							const hash = createHash('sha256')
+								.update(filename + '\0' + name)
+								.digest('base64url')
+								.substring(0, 5);
+							return `_${name}_${hash}`;
+						},
+					},
+				}
+			: undefined,
+		environments: {
+			[ASTRO_VITE_ENVIRONMENT_NAMES.astro]: {
+				// This is all that's needed to create a new RunnableDevEnvironment
+				dev: {},
+			},
+		},
 	};
 
 	// If the user provides a custom assets prefix, make sure assets handled by Vite
-	// are prefixed with it too. This uses one of it's experimental features, but it
+	// are prefixed with it too. This uses one of its experimental features, but it
 	// has been stable for a long time now.
 	const assetsPrefix = settings.config.build.assetsPrefix;
 	if (assetsPrefix) {
@@ -253,7 +352,7 @@ export async function createVite(
 			{ command: command === 'dev' ? 'serve' : command, mode },
 		];
 		// @ts-expect-error ignore TS2589: Type instantiation is excessively deep and possibly infinite.
-		plugins = plugins.flat(Infinity).filter((p) => {
+		plugins = plugins.flat(Number.POSITIVE_INFINITY).filter((p) => {
 			if (!p || p?.apply === applyToFilter) {
 				return false;
 			}
@@ -300,6 +399,7 @@ const COMMON_PREFIXES_NOT_ASTRO = [
 	'@webcomponents/',
 	'@fontsource/',
 	'@postcss-plugins/',
+	'@rolldown/',
 	'@rollup/',
 	'@astrojs/renderer-',
 	'@types/',
@@ -310,6 +410,7 @@ const COMMON_PREFIXES_NOT_ASTRO = [
 	'prettier-plugin-',
 	'remark-',
 	'rehype-',
+	'rolldown-plugin-',
 	'rollup-plugin-',
 	'vite-plugin-',
 ];

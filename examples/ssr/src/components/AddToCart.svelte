@@ -1,7 +1,7 @@
 <script>
 	import { addToUserCart } from '../api';
-	export let id = 0;
-	export let name = '';
+
+	let { id, name } = $props()
 
 	function notifyCartItem(id) {
 		window.dispatchEvent(new CustomEvent('add-to-cart', {
@@ -34,7 +34,7 @@ button:hover {
   transform:scale(1.1);
 }
 
-.pretext {
+.pre-text {
   color:#fff;
   background:#0652DD;
   position:absolute;
@@ -49,6 +49,6 @@ button:hover {
 	text-transform: uppercase;
 }
 </style>
-<button on:click={addToCart}>
-	<span class="pretext">Add to cart</span>
+<button click={addToCart}>
+	<span class="pre-text">Add to cart</span>
 </button>

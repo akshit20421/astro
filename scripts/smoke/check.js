@@ -3,8 +3,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
+import { parse as parseJsonc } from 'jsonc-parser';
 import pLimit from 'p-limit';
-import { toJson } from 'tsconfck';
 
 const skippedExamples = ['toolbar-app', 'component', 'server-islands'];
 
@@ -33,7 +33,7 @@ function checkExamples() {
 
 						const originalConfig = prepareExample(example.name);
 						let data = '';
-						const child = spawn('node', ['../../packages/astro/astro.js', 'check'], {
+						const child = spawn('node', ['../../packages/astro/bin/astro.mjs', 'check'], {
 							cwd: path.join('./examples', example.name),
 							env: { ...process.env, FORCE_COLOR: 'true' },
 						});
@@ -73,7 +73,7 @@ function prepareExample(examplePath) {
 	if (!existsSync(tsconfigPath)) return
 	
 	const originalConfig = readFileSync(tsconfigPath, 'utf-8');
-	const tsconfig = JSON.parse(toJson(originalConfig));
+	const tsconfig = parseJsonc(originalConfig, [], { allowTrailingComma: true });
 
 	// Swap to strictest config to make sure it also passes
 	tsconfig.extends = 'astro/tsconfigs/strictest';

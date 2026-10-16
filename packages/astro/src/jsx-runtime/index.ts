@@ -1,4 +1,4 @@
-import { Fragment, Renderer, markHTMLString } from '../runtime/server/index.js';
+import { escapeHTML, Fragment, markHTMLString, Renderer } from '../runtime/server/index.js';
 
 const AstroJSX = 'astro:jsx';
 const Empty = Symbol('empty');
@@ -65,19 +65,27 @@ function transformSetDirectives(vnode: AstroVNode) {
 		return;
 	}
 	if ('set:text' in vnode.props) {
-		const children = vnode.props['set:text'];
+		const value = vnode.props['set:text'];
+		const children = typeof value === 'string' ? markHTMLString(escapeHTML(value)) : value;
 		delete vnode.props['set:text'];
 		Object.assign(vnode.props, { children });
 		return;
 	}
 }
 
-function createVNode(type: any, props: Record<string, any>) {
+function createVNode(
+	type: any,
+	props: Record<string, any> = {},
+	key?: string | number,
+): AstroVNode {
+	if (key) {
+		props.key = key;
+	}
 	const vnode: AstroVNode = {
 		[Renderer]: 'astro:jsx',
 		[AstroJSX]: true,
 		type,
-		props: props ?? {},
+		props,
 	};
 	transformSetDirectives(vnode);
 	transformSlots(vnode);

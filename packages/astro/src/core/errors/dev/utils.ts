@@ -3,17 +3,16 @@ import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripVTControlCharacters } from 'node:util';
 import { escape } from 'html-escaper';
-import { bold, underline } from 'kleur/colors';
-import type { ESBuildTransformResult } from 'vite';
-import { normalizePath } from 'vite';
-import type { SSRError } from '../../../@types/astro.js';
+import colors from 'piccolore';
+import type { transformWithOxc } from 'vite';
+import type { SSRError } from '../../../types/public/internal.js';
 import { removeLeadingForwardSlashWindows } from '../../path.js';
+import { normalizePath } from '../../viteUtils.js';
 import { AggregateError, type ErrorWithMetadata } from '../errors.js';
-import { AstroErrorData } from '../index.js';
 import { codeFrame } from '../printer.js';
 import { normalizeLF } from '../utils.js';
 
-type EsbuildMessage = ESBuildTransformResult['warnings'][number];
+type OxcMessage = Awaited<ReturnType<typeof transformWithOxc>>['warnings'][number];
 
 /**
  * Takes any error-like object and returns a standardized Error + metadata object.
@@ -24,8 +23,8 @@ export function collectErrorMetadata(e: any, rootFolder?: URL): ErrorWithMetadat
 		AggregateError.is(e) || Array.isArray(e.errors) ? (e.errors as SSRError[]) : [e as SSRError];
 
 	err.forEach((error) => {
-		if (e.stack) {
-			const stackInfo = collectInfoFromStacktrace(e);
+		if (error.stack) {
+			const stackInfo = collectInfoFromStacktrace(error);
 			try {
 				error.stack = stripVTControlCharacters(stackInfo.stack);
 			} catch {}
@@ -69,9 +68,9 @@ export function collectErrorMetadata(e: any, rootFolder?: URL): ErrorWithMetadat
 		}
 
 		// Generic error (probably from Vite, and already formatted)
-		error.hint = generateHint(e);
+		error.hint = generateHint(error);
 
-		// Strip ANSI for `message` property. Note that ESBuild errors may not have the property,
+		// Strip ANSI for `message` property. Note that Oxc errors may not have the property,
 		// but it will be handled and added below, which is already ANSI-free
 		if (error.message) {
 			try {
@@ -82,13 +81,13 @@ export function collectErrorMetadata(e: any, rootFolder?: URL): ErrorWithMetadat
 		}
 	});
 
-	// If we received an array of errors and it's not from us, it's most likely from ESBuild, try to extract info for Vite to display
-	// NOTE: We still need to be defensive here, because it might not necessarily be from ESBuild, it's just fairly likely.
+	// If we received an array of errors and it's not from us, it's most likely from Oxc, try to extract info for Vite to display
+	// NOTE: We still need to be defensive here, because it might not necessarily be from Oxc, it's just fairly likely.
 	if (!AggregateError.is(e) && Array.isArray(e.errors)) {
-		(e.errors as EsbuildMessage[]).forEach((buildError, i) => {
-			const { location, pluginName, text } = buildError;
+		(e.errors as OxcMessage[]).forEach((buildError, i) => {
+			const { loc: location, plugin: pluginName, message: text } = buildError;
 
-			// ESBuild can give us a slightly better error message than the one in the error, so let's use it
+			// Oxc can give us a slightly better error message than the one in the error, so let's use it
 			if (text) {
 				try {
 					err[i].message = text;
@@ -100,7 +99,7 @@ export function collectErrorMetadata(e: any, rootFolder?: URL): ErrorWithMetadat
 				err[i].id = err[0].id || location?.file;
 			}
 
-			// Vite adds the error message to the frame for ESBuild errors, we don't want that
+			// Vite adds the error message to the frame for Oxc errors, we don't want that
 			if (err[i].frame) {
 				const errorLines = err[i].frame?.trim().split('\n');
 
@@ -141,7 +140,7 @@ function generateHint(err: ErrorWithMetadata): string | undefined {
 	const commonBrowserAPIs = ['document', 'window'];
 
 	if (/Unknown file extension "\.(?:jsx|vue|svelte|astro|css)" for /.test(err.message)) {
-		return 'You likely need to add this package to `vite.ssr.noExternal` in your astro config file.';
+		return 'You likely need to add this package to `vite.resolve.noExternal` in your astro config file.';
 	} else if (commonBrowserAPIs.some((api) => err.toString().includes(api))) {
 		const hint = `Browser APIs are not available on the server.
 
@@ -179,9 +178,7 @@ function collectInfoFromStacktrace(error: SSRError & { stack: string }): StackIn
 			error.pluginCode ||
 			error.id ||
 			// TODO: this could be better, `src` might be something else
-			stackText
-				.split('\n')
-				.find((ln) => ln.includes('src') || ln.includes('node_modules'));
+			stackText.split('\n').find((ln) => ln.includes('src') || ln.includes('node_modules'));
 		// Disable eslint as we're not sure how to improve this regex yet
 		// eslint-disable-next-line regexp/no-super-linear-backtracking
 		const source = possibleFilePath?.replace?.(/^[^(]+\(([^)]+).*$/, '$1').replace(/^\s+at\s+/, '');
@@ -225,26 +222,22 @@ function cleanErrorStack(stack: string) {
 		.join('\n');
 }
 
-export function getDocsForError(err: ErrorWithMetadata): string | undefined {
-	if (err.name !== 'UnknownError' && err.name in AstroErrorData) {
-		return `https://docs.astro.build/en/reference/errors/${getKebabErrorName(err.name)}/`;
-	}
-
-	return undefined;
-
-	/**
-	 * The docs has kebab-case urls for errors, so we need to convert the error name
-	 * @param errorName
-	 */
-	function getKebabErrorName(errorName: string): string {
-		return errorName.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
-	}
-}
-
-const linkRegex = /\[([^[]+)\]\((.*)\)/g;
+const linkRegex = /\[([^[]+)\]\(([^)]*)\)/g;
 const boldRegex = /\*\*(.+)\*\*/g;
 const urlRegex = / ((?:https?|ftp):\/\/[-\w+&@#\\/%?=~|!:,.;]*[-\w+&@#\\/%=~|])/gi;
 const codeRegex = /`([^`]+)`/g;
+
+function isAllowedUrl(url: string): boolean {
+	const trimmedUrl = url.trim();
+	if (!trimmedUrl) return false;
+
+	try {
+		const parsedUrl = new URL(trimmedUrl);
+		return ['http:', 'https:'].includes(parsedUrl.protocol);
+	} catch {
+		return false;
+	}
+}
 
 /**
  * Render a subset of Markdown to HTML or a CLI output
@@ -252,14 +245,26 @@ const codeRegex = /`([^`]+)`/g;
 export function renderErrorMarkdown(markdown: string, target: 'html' | 'cli') {
 	if (target === 'html') {
 		return escape(markdown)
-			.replace(linkRegex, `<a href="$2" target="_blank">$1</a>`)
+			.replace(linkRegex, (_match, text, url) => {
+				if (!isAllowedUrl(url)) {
+					return text;
+				}
+
+				return `<a href="${url}" target="_blank">${text}</a>`;
+			})
 			.replace(boldRegex, '<b>$1</b>')
 			.replace(urlRegex, ' <a href="$1" target="_blank">$1</a>')
 			.replace(codeRegex, '<code>$1</code>');
 	} else {
 		return markdown
-			.replace(linkRegex, (_, m1, m2) => `${bold(m1)} ${underline(m2)}`)
-			.replace(urlRegex, (fullMatch) => ` ${underline(fullMatch.trim())}`)
-			.replace(boldRegex, (_, m1) => `${bold(m1)}`);
+			.replace(linkRegex, (_, m1, m2) => {
+				if (!isAllowedUrl(m2)) {
+					return `${colors.bold(m1)} ${m2}`;
+				}
+
+				return `${colors.bold(m1)} ${colors.underline(m2)}`;
+			})
+			.replace(urlRegex, (fullMatch) => ` ${colors.underline(fullMatch.trim())}`)
+			.replace(boldRegex, (_, m1) => `${colors.bold(m1)}`);
 	}
 }

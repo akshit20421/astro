@@ -1,7 +1,7 @@
-import type { ResolvedDevToolbarApp as DevToolbarAppDefinition } from '../../../@types/astro.js';
-import { type ToolbarAppEventTarget, serverHelpers } from './helpers.js';
+import type { ResolvedDevToolbarApp as DevToolbarAppDefinition } from '../../../types/public/toolbar.js';
+import { serverHelpers, type ToolbarAppEventTarget } from './helpers.js';
 import { settings } from './settings.js';
-import { type Icon, getIconElement, isDefinedIcon } from './ui-library/icons.js';
+import { getIconElement, type Icon, isDefinedIcon } from './ui-library/icons.js';
 import type { Placement } from './ui-library/window.js';
 
 export type DevToolbarApp = DevToolbarAppDefinition & {
@@ -15,8 +15,6 @@ export type DevToolbarApp = DevToolbarAppDefinition & {
 	eventTarget: ToolbarAppEventTarget;
 };
 const WS_EVENT_NAME = 'astro-dev-toolbar';
-// TODO: Remove in Astro 5.0
-const WS_EVENT_NAME_DEPRECATED = 'astro-dev-overlay';
 
 const HOVER_DELAY = 2 * 1000;
 const DEVBAR_HITBOX_ABOVE = 42;
@@ -395,8 +393,6 @@ export class AstroDevToolbar extends HTMLElement {
 
 			if (import.meta.hot) {
 				import.meta.hot.send(`${WS_EVENT_NAME}:${app.id}:initialized`);
-				// TODO: Remove in Astro 5.0
-				import.meta.hot.send(`${WS_EVENT_NAME_DEPRECATED}:${app.id}:initialized`);
 			}
 		} catch (e) {
 			console.error(`Failed to init app ${app.id}, error: ${e}`);
@@ -449,7 +445,7 @@ export class AstroDevToolbar extends HTMLElement {
 			if (!closeApp) return;
 		}
 
-		// TODO(fks): Handle a app that hasn't loaded yet.
+		// TODO(fks): Handle an app that hasn't loaded yet.
 		// Currently, this will just do nothing.
 		if (app.status !== 'ready') return;
 
@@ -500,28 +496,16 @@ export class AstroDevToolbar extends HTMLElement {
 			appCanvas.removeAttribute('data-active');
 		}
 
-		[
-			'app-toggled',
-			// Deprecated
-			// TODO: Remove in Astro 5.0
-			'plugin-toggled',
-		].forEach((eventName) => {
-			app.eventTarget.dispatchEvent(
-				new CustomEvent(eventName, {
-					detail: {
-						state: app.active,
-						app,
-					},
-				}),
-			);
-		});
+		app.eventTarget.dispatchEvent(
+			new CustomEvent('app-toggled', {
+				detail: {
+					state: app.active,
+					app,
+				},
+			}),
+		);
 
-		if (import.meta.hot) {
-			import.meta.hot.send(`${WS_EVENT_NAME}:${app.id}:toggled`, { state: app.active });
-			import.meta.hot.send(`${WS_EVENT_NAME_DEPRECATED}:${app.id}:toggled`, {
-				state: app.active,
-			});
-		}
+		import.meta.hot?.send(`${WS_EVENT_NAME}:${app.id}:toggled`, { state: app.active });
 
 		return true;
 	}
@@ -593,13 +577,21 @@ export class AstroDevToolbar extends HTMLElement {
 
 export class DevToolbarCanvas extends HTMLElement {
 	shadowRoot: ShadowRoot;
+	hasRenderedStyles = false;
 
 	constructor() {
 		super();
 		this.shadowRoot = this.attachShadow({ mode: 'open' });
 	}
 
+	// Skip re-initialization when the element reconnects. With <ClientRouter />,
+	// each client-side navigation moves the toolbar into the new document, so
+	// connectedCallback runs again for every canvas it holds.
 	connectedCallback() {
+		if (this.hasRenderedStyles) {
+			return;
+		}
+		this.hasRenderedStyles = true;
 		this.shadowRoot.innerHTML = `
 		<style>
 			:host {

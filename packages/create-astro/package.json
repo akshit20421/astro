@@ -1,12 +1,12 @@
 {
   "name": "create-astro",
-  "version": "4.10.0",
+  "version": "5.3.0",
   "type": "module",
   "author": "withastro",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/withastro/astro.git",
+    "url": "git+https://github.com/withastro/astro.git",
     "directory": "packages/create-astro"
   },
   "bugs": "https://github.com/withastro/astro/issues",
@@ -19,10 +19,10 @@
     "create-astro": "./create-astro.mjs"
   },
   "scripts": {
-    "build": "astro-scripts build \"src/index.ts\" --bundle && tsc",
+    "build": "astro-scripts build \"src/index.ts\" --bundle && tsc -b",
     "build:ci": "astro-scripts build \"src/index.ts\" --bundle",
     "dev": "astro-scripts dev \"src/**/*.ts\"",
-    "test": "astro-scripts test \"test/**/*.test.js\""
+    "test": "astro-scripts test \"test/**/*.test.ts\""
   },
   "files": [
     "dist",
@@ -32,15 +32,15 @@
   "//b": "DEPENDENCIES IS FOR UNBUNDLED PACKAGES",
   "dependencies": {
     "@astrojs/cli-kit": "^0.4.1",
-    "@bluwy/giget-core": "^0.1.0"
+    "@bluwy/giget-core": "^0.1.7"
   },
   "devDependencies": {
+    "@astrojs/internal-helpers": "workspace:*",
     "arg": "^5.0.2",
-    "astro-scripts": "workspace:*",
-    "strip-json-comments": "^5.0.1"
+    "astro-scripts": "workspace:*"
   },
   "engines": {
-    "node": "^18.17.1 || ^20.3.0 || >=21.0.0"
+    "node": ">=22.22.0"
   },
   "publishConfig": {
     "provenance": true

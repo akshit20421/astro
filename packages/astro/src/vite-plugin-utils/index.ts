@@ -1,12 +1,12 @@
 import { fileURLToPath } from 'node:url';
-import ancestor from 'common-ancestor-path';
-import type { AstroConfig } from '../@types/astro.js';
+import { commonAncestorPath } from 'common-ancestor-path';
 import {
 	appendExtension,
 	appendForwardSlash,
 	removeLeadingForwardSlashWindows,
 } from '../core/path.js';
 import { viteID } from '../core/util.js';
+import type { AstroConfig } from '../types/public/config.js';
 
 export function getFileInfo(id: string, config: AstroConfig) {
 	const sitePathname = appendForwardSlash(
@@ -33,17 +33,37 @@ export function getFileInfo(id: string, config: AstroConfig) {
  *
  * - /@fs/home/user/project/src/pages/index.astro
  * - /src/pages/index.astro
+ * - ./src/pages/index.astro
  *
  * as absolute file paths with forward slashes.
  */
 export function normalizeFilename(filename: string, root: URL) {
 	if (filename.startsWith('/@fs')) {
 		filename = filename.slice('/@fs'.length);
-	} else if (filename.startsWith('/') && !ancestor(filename, fileURLToPath(root))) {
+	} else if (filename.startsWith('.')) {
+		// Handle relative paths (e.g. ./src/components/Foo.astro) by resolving against root.
+		// This can occur on certain environments (e.g. Windows + newer Node.js) when a component
+		// is imported via a TypeScript path alias and Vite produces a relative virtual module ID.
+		const url = new URL(filename, root);
+		filename = viteID(url);
+	} else if (filename.startsWith('/') && !isPathInRoot(filename, fileURLToPath(root))) {
 		const url = new URL('.' + filename, root);
 		filename = viteID(url);
 	}
 	return removeLeadingForwardSlashWindows(filename);
+}
+
+/**
+ * Check whether `filename` lives under `rootPath`. Falls back to a case-insensitive
+ * comparison so that paths whose case differs from `rootPath` (e.g. a `d:\dev\foo`
+ * cwd versus a `D:\dev\foo` filesystem on Windows, or any case-insensitive macOS
+ * volume) are still recognized as project-internal absolute paths.
+ */
+function isPathInRoot(filename: string, rootPath: string) {
+	if (commonAncestorPath(filename, rootPath)) {
+		return true;
+	}
+	return commonAncestorPath(filename.toLowerCase(), rootPath.toLowerCase()) !== '';
 }
 
 const postfixRE = /[?#].*$/s;
@@ -51,7 +71,7 @@ export function cleanUrl(url: string): string {
 	return url.replace(postfixRE, '');
 }
 
-const specialQueriesRE = /(?:\?|&)(?:url|raw|direct)(?:&|$)/;
+export const specialQueriesRE = /(?:\?|&)(?:url|raw|direct)(?:&|$)/;
 /**
  * Detect `?url`, `?raw`, and `?direct`, in which case we usually want to skip
  * transforming any code with this queries as Vite will handle it directly.

@@ -1,74 +1,109 @@
 import react, { type Options as ViteReactPluginOptions } from '@vitejs/plugin-react';
-import type { AstroIntegration, ContainerRenderer } from 'astro';
+import type { AstroIntegration, AstroRenderer } from 'astro';
 import type * as vite from 'vite';
 import {
-	type ReactVersionConfig,
-	type SupportedReactVersion,
+	getContainerRenderer as getContainerRendererImpl,
+	getRenderer,
+} from './container-renderer.js';
+import {
 	getReactMajorVersion,
-	isUnsupportedVersion,
+	isSupportedReactVersion,
+	type ReactVersionConfig,
 	versionsConfig,
 } from './version.js';
+import type { EnvironmentOptions } from 'vite';
+import type { VirtualModuleOptions } from './types.js';
+import * as devalue from 'devalue';
 
 export type ReactIntegrationOptions = Pick<
 	ViteReactPluginOptions,
-	'include' | 'exclude' | 'babel'
+	'include' | 'exclude' | 'compiler'
 > & {
 	experimentalReactChildren?: boolean;
+	/**
+	 * Disable streaming in React components
+	 */
+	experimentalDisableStreaming?: boolean;
 };
 
 const FAST_REFRESH_PREAMBLE = react.preambleCode;
 
-function getRenderer(reactConfig: ReactVersionConfig) {
-	return {
-		name: '@astrojs/react',
-		clientEntrypoint: reactConfig.client,
-		serverEntrypoint: reactConfig.server,
-	};
-}
-
-function optionsPlugin(experimentalReactChildren: boolean): vite.Plugin {
+function optionsPlugin({
+	include,
+	exclude,
+	experimentalReactChildren = false,
+	experimentalDisableStreaming = false,
+}: {
+	include?: ViteReactPluginOptions['include'];
+	exclude?: ViteReactPluginOptions['exclude'];
+	experimentalReactChildren: boolean;
+	experimentalDisableStreaming: boolean;
+}): vite.Plugin {
 	const virtualModule = 'astro:react:opts';
 	const virtualModuleId = '\0' + virtualModule;
 	return {
 		name: '@astrojs/react:opts',
-		resolveId(id) {
-			if (id === virtualModule) {
+		resolveId: {
+			filter: {
+				id: new RegExp(`^${virtualModule}$`),
+			},
+			handler() {
 				return virtualModuleId;
-			}
+			},
 		},
-		load(id) {
-			if (id === virtualModuleId) {
-				return {
-					code: `export default {
-						experimentalReactChildren: ${JSON.stringify(experimentalReactChildren)}
-					}`,
+		load: {
+			filter: {
+				id: new RegExp(`^${virtualModuleId}$`),
+			},
+			handler() {
+				const opts: VirtualModuleOptions = {
+					include,
+					exclude,
+					experimentalReactChildren,
+					experimentalDisableStreaming,
 				};
-			}
+				return {
+					code: `export default ${devalue.uneval(opts)}`,
+				};
+			},
 		},
 	};
 }
 
 function getViteConfiguration(
-	{ include, exclude, babel, experimentalReactChildren }: ReactIntegrationOptions = {},
+	{
+		include,
+		exclude,
+		compiler,
+		experimentalReactChildren,
+		experimentalDisableStreaming,
+	}: ReactIntegrationOptions = {},
 	reactConfig: ReactVersionConfig,
 ) {
+	// Always exclude .astro files from the React plugin. In Vite 8, @vitejs/plugin-react
+	// sets jsxRefreshInclude/jsxRefreshExclude which controls vite:oxc's JSX refresh filter.
+	// Without excluding .astro, the filter matches .astro virtual module scripts (e.g.
+	// Foo.astro?astro&type=script&index=0&lang.ts) and forces lang to 'js', causing OXC
+	// to fail parsing TypeScript syntax like `import type`.
+	const defaultExclude = [/\.astro$/, /\/node_modules\//];
+	const mergedExclude = exclude
+		? Array.isArray(exclude)
+			? [...exclude, ...defaultExclude]
+			: [exclude, ...defaultExclude]
+		: defaultExclude;
+
 	return {
-		optimizeDeps: {
-			include: [
-				reactConfig.client,
-				'react',
-				'react/jsx-runtime',
-				'react/jsx-dev-runtime',
-				'react-dom',
-			],
-			exclude: [reactConfig.server],
-		},
-		plugins: [react({ include, exclude, babel }), optionsPlugin(!!experimentalReactChildren)],
-		resolve: {
-			dedupe: ['react', 'react-dom', 'react-dom/server'],
-		},
+		plugins: [
+			react({ include, exclude: mergedExclude, compiler }),
+			optionsPlugin({
+				include,
+				exclude,
+				experimentalReactChildren: !!experimentalReactChildren,
+				experimentalDisableStreaming: !!experimentalDisableStreaming,
+			}),
+			configEnvironmentPlugin(reactConfig),
+		],
 		ssr: {
-			external: reactConfig.externals,
 			noExternal: [
 				// These are all needed to get mui to work.
 				'@mui/material',
@@ -81,17 +116,71 @@ function getViteConfiguration(
 	};
 }
 
-export default function ({
-	include,
-	exclude,
-	babel,
-	experimentalReactChildren,
-}: ReactIntegrationOptions = {}): AstroIntegration {
+function configEnvironmentPlugin(reactConfig: ReactVersionConfig): vite.Plugin {
+	return {
+		name: '@astrojs/react:environment',
+		configEnvironment(environmentName, options): EnvironmentOptions {
+			const finalOptions: EnvironmentOptions = {
+				resolve: {
+					dedupe: ['react', 'react-dom'],
+				},
+				optimizeDeps: {},
+			};
+
+			if (
+				environmentName === 'client' ||
+				((environmentName === 'ssr' || environmentName === 'prerender') &&
+					options.optimizeDeps?.noDiscovery === false)
+			) {
+				// SAFETY: we initialized it before
+				finalOptions.optimizeDeps!.include = [
+					'react',
+					'react/jsx-runtime',
+					'react/jsx-dev-runtime',
+					'react-dom',
+				];
+				finalOptions.optimizeDeps!.exclude = [reactConfig.server];
+				if (environmentName === 'ssr' || environmentName === 'prerender') {
+					finalOptions.optimizeDeps!.include.push('react-dom/server');
+					if (!options.resolve?.noExternal) {
+						finalOptions.resolve!.noExternal = [
+							// These are all needed to get mui to work.
+							'@mui/material',
+							'@mui/base',
+							'@babel/runtime',
+							'use-immer',
+							'@material-tailwind/react',
+						];
+					}
+				}
+				if (environmentName === 'client') {
+					finalOptions.optimizeDeps!.include.push('react-dom/client');
+					finalOptions.optimizeDeps!.include.push(reactConfig.client);
+				}
+			}
+
+			return finalOptions;
+		},
+	};
+}
+
+export default function (options: ReactIntegrationOptions = {}): AstroIntegration {
+	if ('babel' in options) {
+		throw new Error(
+			'The @astrojs/react babel option has been removed. Configure @rolldown/plugin-babel in vite.plugins for custom Babel transforms.',
+		);
+	}
+	const { include, exclude, compiler, experimentalReactChildren, experimentalDisableStreaming } =
+		options;
 	const majorVersion = getReactMajorVersion();
-	if (isUnsupportedVersion(majorVersion)) {
+	if (!isSupportedReactVersion(majorVersion)) {
 		throw new Error(`Unsupported React version: ${majorVersion}.`);
 	}
-	const versionConfig = versionsConfig[majorVersion as SupportedReactVersion];
+	const versionConfig = versionsConfig[majorVersion];
+	const compilerOptions = compiler && {
+		target: `${majorVersion}` as const,
+		...(typeof compiler === 'object' ? compiler : {}),
+	};
 
 	return {
 		name: '@astrojs/react',
@@ -100,7 +189,13 @@ export default function ({
 				addRenderer(getRenderer(versionConfig));
 				updateConfig({
 					vite: getViteConfiguration(
-						{ include, exclude, babel, experimentalReactChildren },
+						{
+							include,
+							exclude,
+							compiler: compilerOptions,
+							experimentalReactChildren,
+							experimentalDisableStreaming,
+						},
 						versionConfig,
 					),
 				});
@@ -109,19 +204,28 @@ export default function ({
 					injectScript('before-hydration', preamble);
 				}
 			},
+			'astro:config:done': ({ logger, config }) => {
+				const knownJsxRenderers = ['@astrojs/react', '@astrojs/preact', '@astrojs/solid-js'];
+				const enabledKnownJsxRenderers = config.integrations.filter((renderer) =>
+					knownJsxRenderers.includes(renderer.name),
+				);
+
+				if (enabledKnownJsxRenderers.length > 1 && !include && !exclude) {
+					logger.warn(
+						'More than one JSX renderer is enabled. This will lead to unexpected behavior unless you set the `include` or `exclude` option. See https://docs.astro.build/en/guides/integrations-guide/react/#combining-multiple-jsx-frameworks for more information.',
+					);
+				}
+			},
 		},
 	};
 }
 
-export function getContainerRenderer(): ContainerRenderer {
-	const majorVersion = getReactMajorVersion();
-	if (isUnsupportedVersion(majorVersion)) {
-		throw new Error(`Unsupported React version: ${majorVersion}.`);
-	}
-	const versionConfig = versionsConfig[majorVersion as SupportedReactVersion];
-
-	return {
-		name: '@astrojs/react',
-		serverEntrypoint: versionConfig.server,
-	};
+/**
+ * @deprecated Import `getContainerRenderer` from `@astrojs/react/container-renderer` instead.
+ */
+export function getContainerRenderer(): AstroRenderer {
+	console.warn(
+		'[@astrojs/react] Importing `getContainerRenderer` from `@astrojs/react` is deprecated. Import it from `@astrojs/react/container-renderer` instead.',
+	);
+	return getContainerRendererImpl();
 }

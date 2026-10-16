@@ -1,5 +1,5 @@
 import os from 'node:os';
-import { type Task, prompt } from '@astrojs/cli-kit';
+import { prompt, type Task } from '@astrojs/cli-kit';
 import { random } from '@astrojs/cli-kit/utils';
 import arg from 'arg';
 
@@ -15,6 +15,7 @@ export interface Context {
 	version: Promise<string>;
 	skipHouston: boolean;
 	fancy?: boolean;
+	add?: string[];
 	dryRun?: boolean;
 	yes?: boolean;
 	projectName?: string;
@@ -22,6 +23,7 @@ export interface Context {
 	ref: string;
 	install?: boolean;
 	git?: boolean;
+	ai: boolean;
 	typescript?: string;
 	stdin?: typeof process.stdin;
 	stdout?: typeof process.stdout;
@@ -32,7 +34,24 @@ export interface Context {
 	tasks: Task[];
 }
 
+function getPackageTag(packageSpecifier: string | undefined): string | undefined {
+	switch (packageSpecifier) {
+		case 'alpha':
+		case 'beta':
+		case 'rc':
+			return packageSpecifier;
+		// Will fall back to latest
+		case undefined:
+		default:
+			return undefined;
+	}
+}
+
 export async function getContext(argv: string[]): Promise<Context> {
+	const packageSpecifier = argv
+		.find((argItem) => /^(astro|create-astro)@/.exec(argItem))
+		?.split('@')[1];
+
 	const flags = arg(
 		{
 			'--template': String,
@@ -43,11 +62,12 @@ export async function getContext(argv: string[]): Promise<Context> {
 			'--no-install': Boolean,
 			'--git': Boolean,
 			'--no-git': Boolean,
-			'--typescript': String,
+			'--no-ai': Boolean,
 			'--skip-houston': Boolean,
 			'--dry-run': Boolean,
 			'--help': Boolean,
 			'--fancy': Boolean,
+			'--add': [String],
 
 			'-y': '--yes',
 			'-n': '--no',
@@ -67,24 +87,32 @@ export async function getContext(argv: string[]): Promise<Context> {
 		'--no-install': noInstall,
 		'--git': git,
 		'--no-git': noGit,
-		'--typescript': typescript,
+		'--no-ai': noAI,
 		'--fancy': fancy,
 		'--skip-houston': skipHouston,
 		'--dry-run': dryRun,
 		'--ref': ref,
+		'--add': add,
 	} = flags;
+
+	if (add?.length && noInstall) {
+		console.error(
+			'The --add flag requires dependencies to be installed. Remove --no-install or run `astro add` manually after installation.',
+		);
+		process.exit(1);
+	}
+
 	let projectName = cwd;
 
 	if (no) {
 		yes = false;
-		if (install == undefined) install = false;
-		if (git == undefined) git = false;
-		if (typescript == undefined) typescript = 'strict';
+		if (install === undefined) install = false;
+		if (git === undefined) git = false;
 	}
 
 	skipHouston =
 		((os.platform() === 'win32' && !fancy) || skipHouston) ??
-		[yes, no, install, git, typescript].some((v) => v !== undefined);
+		[yes, no, install, git].some((v) => v !== undefined);
 
 	const { messages, hats, ties } = getSeasonalData({ fancy });
 
@@ -93,9 +121,15 @@ export async function getContext(argv: string[]): Promise<Context> {
 		prompt,
 		packageManager,
 		username: getName(),
-		version: getVersion(packageManager, 'astro', process.env.ASTRO_VERSION),
+		version: getVersion(
+			packageManager,
+			'astro',
+			getPackageTag(packageSpecifier),
+			process.env.ASTRO_VERSION,
+		),
 		skipHouston,
 		fancy,
+		add,
 		dryRun,
 		projectName,
 		template,
@@ -106,7 +140,7 @@ export async function getContext(argv: string[]): Promise<Context> {
 		yes,
 		install: install ?? (noInstall ? false : undefined),
 		git: git ?? (noGit ? false : undefined),
-		typescript,
+		ai: noAI ? false : true,
 		cwd,
 		exit(code) {
 			process.exit(code);

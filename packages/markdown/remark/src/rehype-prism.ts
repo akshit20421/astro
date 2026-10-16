@@ -3,14 +3,16 @@ import type { Root } from 'hast';
 import type { Plugin } from 'unified';
 import { highlightCodeBlocks } from './highlight.js';
 
-export const rehypePrism: Plugin<[], Root> = () => {
+export const rehypePrism: Plugin<[string[]?], Root> = (excludeLangs) => {
 	return async (tree) => {
-		await highlightCodeBlocks(tree, (code, language) => {
-			let { html, classLanguage } = runHighlighterWithAstro(language, code);
+		await highlightCodeBlocks(
+			tree,
+			async (code, language) => {
+				let { html, classLanguage } = await runHighlighterWithAstro(language, code);
 
-			return Promise.resolve(
-				`<pre class="${classLanguage}" data-language="${language}"><code is:raw class="${classLanguage}">${html}</code></pre>`,
-			);
-		});
+				return `<pre class="${classLanguage}" data-language="${language}"><code class="${classLanguage}">${html}</code></pre>`;
+			},
+			excludeLangs,
+		);
 	};
 };

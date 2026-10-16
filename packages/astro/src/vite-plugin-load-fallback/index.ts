@@ -6,21 +6,20 @@ import { cleanUrl } from '../vite-plugin-utils/index.js';
 
 type NodeFileSystemModule = typeof nodeFs;
 
-export interface LoadFallbackPluginParams {
+interface LoadFallbackPluginParams {
 	fs?: NodeFileSystemModule;
 	root: URL;
 }
 
-export default function loadFallbackPlugin({
-	fs,
-	root,
-}: LoadFallbackPluginParams): vite.Plugin[] | false {
+const FALLBACK_FLAG = 'astroFallbackFlag';
+
+export default function loadFallbackPlugin({ fs, root }: LoadFallbackPluginParams): vite.Plugin[] {
 	// Only add this plugin if a custom fs implementation is provided.
 	// Also check for `fs.default` because `import * as fs from 'node:fs'` will
 	// export as so, which only it's `.default` would === `nodeFs`.
 	// @ts-expect-error check default
 	if (!fs || fs === nodeFs || fs.default === nodeFs) {
-		return false;
+		return [];
 	}
 
 	const tryLoadModule = async (id: string) => {
@@ -53,14 +52,22 @@ export default function loadFallbackPlugin({
 						// Check to see if this file exists and is not a directory.
 						const stats = await fs.promises.stat(candidateId);
 						if (!stats.isDirectory()) {
-							return candidateId;
+							const params = new URLSearchParams(FALLBACK_FLAG);
+							return `${candidateId}?${params.toString()}`;
 						}
 					} catch {}
 				}
 			},
-			async load(id) {
-				const source = await tryLoadModule(id);
-				return source;
+			load: {
+				filter: {
+					id: new RegExp(`(?:\\?|&)${FALLBACK_FLAG}(?:&|=|$)`),
+				},
+				async handler(id) {
+					const code = await tryLoadModule(id.slice(0, -(1 + FALLBACK_FLAG.length)));
+					if (code) {
+						return { code };
+					}
+				},
 			},
 		},
 		{

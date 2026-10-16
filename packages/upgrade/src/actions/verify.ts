@@ -1,13 +1,10 @@
-import type { Context, PackageInfo } from './context.js';
-
 import dns from 'node:dns/promises';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { color } from '@astrojs/cli-kit';
-import semverCoerce from 'semver/functions/coerce.js';
-import semverDiff from 'semver/functions/diff.js';
-import semverParse from 'semver/functions/parse.js';
+import { coerce, difference, isGreaterThan, tryParse } from 'verkit';
 import { bannerAbort, error, getRegistry, info, newline } from '../messages.js';
+import type { Context, PackageInfo } from './context.js';
 
 export async function verify(
 	ctx: Pick<Context, 'version' | 'packages' | 'cwd' | 'dryRun' | 'exit'>,
@@ -24,7 +21,13 @@ export async function verify(
 		}
 	}
 
-	await verifyAstroProject(ctx);
+	const isAstroProject = await verifyAstroProject(ctx);
+	if (!isAstroProject) {
+		bannerAbort();
+		newline();
+		error('error', `Astro installation not found in the current directory.`);
+		ctx.exit(1);
+	}
 
 	const ok = await verifyVersions(ctx, registry);
 	if (!ok) {
@@ -37,8 +40,8 @@ export async function verify(
 }
 
 function isOnline(registry: string): Promise<boolean> {
-	const { host } = new URL(registry);
-	return dns.lookup(host).then(
+	const { hostname } = new URL(registry);
+	return dns.lookup(hostname).then(
 		() => true,
 		() => false,
 	);
@@ -75,7 +78,7 @@ function isAllowedPackage(name: string, _version: string) {
 }
 
 function isValidVersion(_name: string, version: string) {
-	return semverCoerce(version, { loose: true }) !== null;
+	return coerce(version, { loose: true }) !== null;
 }
 
 function isSupportedPackage(name: string, version: string): boolean {
@@ -130,7 +133,10 @@ async function verifyVersions(
 	return true;
 }
 
-async function resolveTargetVersion(packageInfo: PackageInfo, registry: string): Promise<void> {
+export async function resolveTargetVersion(
+	packageInfo: PackageInfo,
+	registry: string,
+): Promise<void> {
 	const packageMetadata = await fetch(`${registry}/${packageInfo.name}`, {
 		headers: { accept: 'application/vnd.npm.install-v1+json' },
 	});
@@ -140,8 +146,16 @@ async function resolveTargetVersion(packageInfo: PackageInfo, registry: string):
 	const { 'dist-tags': distTags } = await packageMetadata.json();
 	let version = distTags[packageInfo.targetVersion];
 	if (version) {
-		packageInfo.tag = packageInfo.targetVersion;
-		packageInfo.targetVersion = version;
+		const currentCoerced = coerce(packageInfo.currentVersion);
+		const targetParsed = tryParse(version);
+		// If the dist-tag points to a version older than the installed one, fall back to latest.
+		if (currentCoerced && targetParsed && isGreaterThan(currentCoerced, targetParsed)) {
+			packageInfo.targetVersion = 'latest';
+			version = distTags.latest;
+		} else {
+			packageInfo.tag = packageInfo.targetVersion;
+			packageInfo.targetVersion = version;
+		}
 	} else {
 		packageInfo.targetVersion = 'latest';
 		version = distTags.latest;
@@ -151,16 +165,16 @@ async function resolveTargetVersion(packageInfo: PackageInfo, registry: string):
 	}
 	const prefix = packageInfo.targetVersion === 'latest' ? '^' : '';
 	packageInfo.targetVersion = `${prefix}${version}`;
-	const fromVersion = semverCoerce(packageInfo.currentVersion)!;
-	const toVersion = semverParse(version)!;
-	const bump = semverDiff(fromVersion, toVersion);
-	if ((bump === 'major' && toVersion.prerelease.length === 0) || bump === 'premajor') {
+	const fromVersion = coerce(packageInfo.currentVersion)!;
+	const toVersion = tryParse(version)!;
+	const bump = difference(fromVersion, toVersion);
+	if ((bump === 'major' && (toVersion.prerelease?.length ?? 0) === 0) || bump === 'premajor') {
 		packageInfo.isMajor = true;
 		if (packageInfo.name === 'astro') {
 			const upgradeGuide = `https://docs.astro.build/en/guides/upgrade-to/v${toVersion.major}/`;
 			const docsRes = await fetch(upgradeGuide);
 			// OK if this request fails, it's probably a prerelease without a public migration guide.
-			// In that case, we should fallback to the CHANGELOG check below.
+			// In that case, we should fall back to the CHANGELOG check below.
 			if (docsRes.status === 200) {
 				packageInfo.changelogURL = upgradeGuide;
 				packageInfo.changelogTitle = `Upgrade to Astro v${toVersion.major}`;

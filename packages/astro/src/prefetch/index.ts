@@ -1,6 +1,8 @@
 /*
-  NOTE: Do not add any dependencies or imports in this file so that it can load quickly in dev.
+  NOTE: Be careful about adding dependencies or imports in this file so that it can load quickly in dev.
 */
+
+import { internalFetchHeaders } from 'virtual:astro:adapter-config/client';
 
 const debug = import.meta.env.DEV ? console.debug : undefined;
 const inBrowser = import.meta.env.SSR === false;
@@ -54,11 +56,12 @@ export function init(defaultOpts?: InitOptions) {
  */
 function initTapStrategy() {
 	for (const event of ['touchstart', 'mousedown']) {
-		document.body.addEventListener(
+		document.addEventListener(
 			event,
 			(e) => {
-				if (elMatchesStrategy(e.target, 'tap')) {
-					prefetch(e.target.href, { ignoreSlowConnection: true });
+				const anchor = (e.target as Element).closest('a');
+				if (elMatchesStrategy(anchor, 'tap')) {
+					prefetch(anchor.href, { ignoreSlowConnection: true });
 				}
 			},
 			{ passive: true },
@@ -76,8 +79,9 @@ function initHoverStrategy() {
 	document.body.addEventListener(
 		'focusin',
 		(e) => {
-			if (elMatchesStrategy(e.target, 'hover')) {
-				handleHoverIn(e);
+			const anchor = (e.target as Element).closest('a');
+			if (elMatchesStrategy(anchor, 'hover')) {
+				handleHoverIn(anchor.href);
 			}
 		},
 		{ passive: true },
@@ -92,15 +96,17 @@ function initHoverStrategy() {
 			// Add listeners for anchors matching the strategy
 			if (elMatchesStrategy(anchor, 'hover')) {
 				listenedAnchors.add(anchor);
-				anchor.addEventListener('mouseenter', handleHoverIn, { passive: true });
+				anchor.addEventListener(
+					'mouseenter',
+					(e) => handleHoverIn((e.currentTarget as HTMLAnchorElement).href),
+					{ passive: true },
+				);
 				anchor.addEventListener('mouseleave', handleHoverOut, { passive: true });
 			}
 		}
 	});
 
-	function handleHoverIn(e: Event) {
-		const href = (e.target as HTMLAnchorElement).href;
-
+	function handleHoverIn(href: string) {
 		// Debounce hover prefetches by 80ms
 		if (timeout) {
 			clearTimeout(timeout);
@@ -187,19 +193,17 @@ function initLoadStrategy() {
 
 export interface PrefetchOptions {
 	/**
-	 * How the prefetch should prioritize the URL. (default `'link'`)
-	 * - `'link'`: use `<link rel="prefetch">`.
-	 * - `'fetch'`: use `fetch()`.
-	 *
-	 * @deprecated It is recommended to not use this option, and let prefetch use `'link'` whenever it's supported,
-	 * or otherwise fall back to `'fetch'`. `'link'` works better if the URL doesn't set an appropriate cache header,
-	 * as the browser will continue to cache it as long as it's used subsequently.
-	 */
-	with?: 'link' | 'fetch';
-	/**
 	 * Should prefetch even on data saver mode or slow connection. (default `false`)
 	 */
 	ignoreSlowConnection?: boolean;
+	/**
+	 * A string providing a hint to the browser as to how eagerly it should prefetch/prerender link targets in order to balance performance advantages against resource overheads. (default `immediate`)
+	 * Only works if `clientPrerender` is enabled and browser supports Speculation Rules API.
+	 * The browser takes this hint into consideration along with its own heuristics, so it may select a link that the author has hinted as less eager than another, if the less eager candidate is considered a better choice.
+	 *
+	 * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/speculationrules#eagerness
+	 */
+	eagerness?: 'immediate' | 'eager' | 'moderate' | 'conservative';
 }
 
 /**
@@ -221,17 +225,20 @@ export function prefetch(url: string, opts?: PrefetchOptions) {
 	if (!canPrefetchUrl(url, ignoreSlowConnection)) return;
 	prefetchedUrls.add(url);
 
-	// Prefetch with speculationrules if `clientPrerender` is enabled and supported
+	// Prefetch with speculationrules if `clientPrerender` is enabled and supported.
+	// Skip dynamic injection when a static document-source speculation rules script is already
+	// in the page (injected at build time for CSP compatibility).
 	// NOTE: This condition is tree-shaken if `clientPrerender` is false as its a static value
-	if (clientPrerender && HTMLScriptElement.supports?.('speculationrules')) {
+	if (
+		clientPrerender &&
+		HTMLScriptElement.supports?.('speculationrules') &&
+		!hasStaticSpeculationRules()
+	) {
 		debug?.(`[astro] Prefetching ${url} with <script type="speculationrules">`);
-		appendSpeculationRules(url);
+		appendSpeculationRules(url, opts?.eagerness ?? 'immediate');
 	}
 	// Prefetch with link if supported
-	else if (
-		document.createElement('link').relList?.supports?.('prefetch') &&
-		opts?.with !== 'fetch'
-	) {
+	else if (document.createElement('link').relList?.supports?.('prefetch')) {
 		debug?.(`[astro] Prefetching ${url} with <link rel="prefetch">`);
 		const link = document.createElement('link');
 		link.rel = 'prefetch';
@@ -241,7 +248,17 @@ export function prefetch(url: string, opts?: PrefetchOptions) {
 	// Otherwise, fallback prefetch with fetch
 	else {
 		debug?.(`[astro] Prefetching ${url} with fetch`);
-		fetch(url, { priority: 'low' });
+		// Apply adapter-specific headers for internal fetches
+		const headers = new Headers();
+		for (const [key, value] of Object.entries(internalFetchHeaders) as [string, string][]) {
+			headers.set(key, value);
+		}
+		// The `<link rel="prefetch">` branch above is unsupported in WebKit
+		// (Safari), so this fetch fallback is the path there. A prefetch is a
+		// best-effort hint, so swallow network failures — otherwise a flaky
+		// connection surfaces an unhandled `TypeError: Load failed` rejection
+		// to the page's global error handlers (and trips no-floating-promises).
+		fetch(url, { priority: 'low', headers }).catch(() => {});
 	}
 }
 
@@ -300,7 +317,8 @@ function isSlowConnection() {
 }
 
 /**
- * Listen to page loads and handle Astro's View Transition specific events
+ * Listen to page loads and handle Astro's View Transition specific events.
+ * Also observes DOM mutations for dynamically added anchors (e.g. from server islands).
  */
 function onPageLoad(cb: () => void) {
 	cb();
@@ -314,6 +332,44 @@ function onPageLoad(cb: () => void) {
 		}
 		cb();
 	});
+
+	// Watch for dynamically added anchors (e.g. from server islands)
+	new MutationObserver((mutations) => {
+		for (const mutation of mutations) {
+			for (const node of mutation.addedNodes) {
+				if (node instanceof Element && (node.tagName === 'A' || node.querySelector?.('a'))) {
+					cb();
+					return;
+				}
+			}
+		}
+	}).observe(document.body, { childList: true, subtree: true });
+}
+
+/** Cached result of static speculation rules detection. */
+let _hasStaticRules: boolean | undefined;
+
+/**
+ * Returns `true` when a `<script type="speculationrules">` using `"source": "document"`
+ * is already present in the page (injected server-side for CSP compatibility).
+ * The browser handles URL matching via CSS selectors in that case, so per-URL
+ * dynamic injection is unnecessary.
+ */
+function hasStaticSpeculationRules(): boolean {
+	if (_hasStaticRules === undefined) {
+		_hasStaticRules = Array.from(document.querySelectorAll('script[type="speculationrules"]')).some(
+			(el) => {
+				try {
+					const rules = JSON.parse(el.textContent ?? '');
+					const entries = [...(rules.prerender ?? []), ...(rules.prefetch ?? [])];
+					return entries.some((entry: any) => entry.source === 'document');
+				} catch {
+					return false;
+				}
+			},
+		);
+	}
+	return _hasStaticRules;
 }
 
 /**
@@ -324,15 +380,20 @@ function onPageLoad(cb: () => void) {
  * A new script must be added for each `url`.
  *
  * @param url The url of the page to prerender.
+ *
+ * @param eagerness Hint to the browser as to how eagerly it should prefetch/prerender link targets
  */
-function appendSpeculationRules(url: string) {
+function appendSpeculationRules(url: string, eagerness: PrefetchOptions['eagerness']) {
 	const script = document.createElement('script');
 	script.type = 'speculationrules';
+	// nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
+	// This writes JSON via textContent, not executable JavaScript source.
 	script.textContent = JSON.stringify({
 		prerender: [
 			{
 				source: 'list',
 				urls: [url],
+				eagerness: eagerness,
 			},
 		],
 		// Currently, adding `prefetch` is required to fallback if `prerender` fails.
@@ -342,6 +403,7 @@ function appendSpeculationRules(url: string) {
 			{
 				source: 'list',
 				urls: [url],
+				eagerness: eagerness,
 			},
 		],
 	});

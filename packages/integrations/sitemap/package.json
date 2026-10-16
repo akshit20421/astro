@@ -1,14 +1,13 @@
 {
   "name": "@astrojs/sitemap",
   "description": "Generate a sitemap for your Astro site",
-  "version": "3.2.1",
+  "version": "3.7.4",
   "type": "module",
-  "types": "./dist/index.d.ts",
   "author": "withastro",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/withastro/astro.git",
+    "url": "git+https://github.com/withastro/astro.git",
     "directory": "packages/integrations/sitemap"
   },
   "keywords": [
@@ -27,18 +26,17 @@
     "dist"
   ],
   "scripts": {
-    "build": "astro-scripts build \"src/**/*.ts\" && tsc",
+    "build": "astro-scripts build \"src/**/*.ts\" && tsc -b",
     "build:ci": "astro-scripts build \"src/**/*.ts\"",
     "dev": "astro-scripts dev \"src/**/*.ts\"",
-    "test": "astro-scripts test \"test/**/*.test.js\""
+    "test": "astro-scripts test \"test/**/*.test.ts\""
   },
   "dependencies": {
-    "sitemap": "^8.0.0",
-    "stream-replace-string": "^2.0.0",
-    "zod": "^3.23.8"
+    "sitemap": "^9.0.1",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@astrojs/node": "^8.3.3",
+    "@types/xml2js": "^0.4.14",
     "astro": "workspace:*",
     "astro-scripts": "workspace:*",
     "xml2js": "0.6.2"

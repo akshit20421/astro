@@ -1,17 +1,17 @@
-import type { SSRResult } from '../../../@types/astro.js';
-import type { RenderInstruction } from './instruction.js';
-
+import type { SSRResult } from '../../../types/public/internal.js';
 import type { HTMLBytes, HTMLString } from '../escape.js';
 import { markHTMLString } from '../escape.js';
 import {
-	type PrescriptType,
 	determineIfNeedsHydrationScript,
 	determinesIfNeedsDirectiveScript,
 	getPrescripts,
 } from '../scripts.js';
+import { getInstructionRenderState, shouldRenderInstruction } from './head-propagation/runtime.js';
 import { renderAllHeadContent } from './head.js';
+import type { RenderInstruction } from './instruction.js';
 import { isRenderInstruction } from './instruction.js';
-import { type SlotString, isSlotString } from './slot.js';
+import { renderServerIslandRuntime } from './server-islands.js';
+import { isSlotString, type SlotString } from './slot.js';
 
 /**
  * Possible chunk types to be written to the destination, and it'll
@@ -56,35 +56,35 @@ function stringifyChunk(
 	result: SSRResult,
 	chunk: string | HTMLString | SlotString | RenderInstruction,
 ): string {
+	if (typeof chunk === 'string') return chunk;
+
 	if (isRenderInstruction(chunk)) {
 		const instruction = chunk;
 		switch (instruction.type) {
 			case 'directive': {
 				const { hydration } = instruction;
-				let needsHydrationScript = hydration && determineIfNeedsHydrationScript(result);
-				let needsDirectiveScript =
+				const needsHydrationScript = hydration && determineIfNeedsHydrationScript(result);
+				const needsDirectiveScript =
 					hydration && determinesIfNeedsDirectiveScript(result, hydration.directive);
 
-				let prescriptType: PrescriptType = needsHydrationScript
-					? 'both'
-					: needsDirectiveScript
-						? 'directive'
-						: null;
-				if (prescriptType) {
-					let prescripts = getPrescripts(result, prescriptType, hydration.directive);
+				if (needsHydrationScript) {
+					const prescripts = getPrescripts(result, 'both', hydration.directive);
+					return markHTMLString(prescripts);
+				} else if (needsDirectiveScript) {
+					const prescripts = getPrescripts(result, 'directive', hydration.directive);
 					return markHTMLString(prescripts);
 				} else {
 					return '';
 				}
 			}
 			case 'head': {
-				if (result._metadata.hasRenderedHead || result.partial) {
+				if (!shouldRenderInstruction('head', getInstructionRenderState(result))) {
 					return '';
 				}
 				return renderAllHeadContent(result);
 			}
 			case 'maybe-head': {
-				if (result._metadata.hasRenderedHead || result._metadata.headInTree || result.partial) {
+				if (!shouldRenderInstruction('maybe-head', getInstructionRenderState(result))) {
 					return '';
 				}
 				return renderAllHeadContent(result);
@@ -92,11 +92,54 @@ function stringifyChunk(
 			case 'renderer-hydration-script': {
 				const { rendererSpecificHydrationScripts } = result._metadata;
 				const { rendererName } = instruction;
+				if (result._metadata.templateDepth > 0) {
+					return instruction.render();
+				}
 
 				if (!rendererSpecificHydrationScripts.has(rendererName)) {
 					rendererSpecificHydrationScripts.add(rendererName);
 					return instruction.render();
 				}
+				return '';
+			}
+			case 'server-island-runtime': {
+				if (result._metadata.templateDepth > 0) {
+					return renderServerIslandRuntime();
+				}
+				if (result._metadata.hasRenderedServerIslandRuntime) {
+					return '';
+				}
+				result._metadata.hasRenderedServerIslandRuntime = true;
+				return renderServerIslandRuntime();
+			}
+			case 'script': {
+				const { id, content } = instruction;
+				// If we're inside a <template> element, still render the script but
+				// don't mark it as deduplicated. Template content is inert, scripts
+				// inside don't execute, so the script must also appear outside the
+				// template for non-template instances to work
+				if (result._metadata.templateDepth > 0) {
+					return content;
+				}
+				if (result._metadata.renderedScripts.has(id)) {
+					return '';
+				}
+				result._metadata.renderedScripts.add(id);
+				return content;
+			}
+			case 'template-enter': {
+				result._metadata.templateDepth++;
+				return '';
+			}
+			case 'template-exit': {
+				if (result._metadata.templateDepth <= 0) {
+					throw new Error(
+						'Unexpected template-exit instruction without a matching template-enter. ' +
+							'This may indicate that the compiler emitted unbalanced template boundaries, ' +
+							'or that a component manually injected a template-exit render instruction.',
+					);
+				}
+				result._metadata.templateDepth--;
 				return '';
 			}
 			default: {
@@ -108,12 +151,21 @@ function stringifyChunk(
 	} else if (isSlotString(chunk as string)) {
 		let out = '';
 		const c = chunk as SlotString;
+		// Position-independent instructions (head, hydration, etc.) are emitted first.
 		if (c.instructions) {
 			for (const instr of c.instructions) {
 				out += stringifyChunk(result, instr);
 			}
 		}
-		out += chunk.toString();
+		// Walk the ordered content stream so scripts render at their original
+		// position (and are deduplicated) instead of being hoisted to the front.
+		if (c.chunks.length) {
+			for (const part of c.chunks) {
+				out += typeof part === 'string' ? part : stringifyChunk(result, part);
+			}
+		} else {
+			out += chunk.toString();
+		}
 		return out;
 	}
 
@@ -141,6 +193,21 @@ export function chunkToByteArray(
 	}
 }
 
+export function chunkToByteArrayOrString(
+	result: SSRResult,
+	chunk: Exclude<RenderDestinationChunk, Response>,
+): Uint8Array | string {
+	if (ArrayBuffer.isView(chunk)) {
+		return chunk as Uint8Array;
+	} else {
+		return stringifyChunk(result, chunk).toString();
+	}
+}
+
 export function isRenderInstance(obj: unknown): obj is RenderInstance {
-	return !!obj && typeof obj === 'object' && 'render' in obj && typeof obj.render === 'function';
+	return (
+		typeof obj === 'object' &&
+		obj !== null &&
+		typeof (obj as { render?: unknown }).render === 'function'
+	);
 }

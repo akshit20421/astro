@@ -1,15 +1,29 @@
 import path from 'node:path';
+import { getMajor } from 'verkit';
 import { ensureProcessNodeEnv } from '../../core/util.js';
-import { type Flags, createLoggerFromFlags, flagsToAstroInlineConfig } from '../flags.js';
-import { getPackage } from '../install-package.js';
+import { createLoggerFromFlags, type Flags, flagsToAstroInlineConfig } from '../flags.js';
+import { getPackage, getPackageVersion } from '../install-package.js';
 
-export async function check(flags: Flags) {
+export async function check(flags: Flags): Promise<boolean | void> {
 	ensureProcessNodeEnv('production');
 	const logger = createLoggerFromFlags(flags);
 	const getPackageOpts = {
 		skipAsk: !!flags.yes || !!flags.y,
 		cwd: flags.root,
 	};
+	const typescriptVersion = await getPackageVersion('typescript', flags.root);
+
+	if (typescriptVersion && getMajor(typescriptVersion) >= 7) {
+		logger.error(
+			'check',
+			'astro check does not currently support TypeScript 7.0. To continue using astro check, install TypeScript 6 instead.\n\n' +
+				'astro check will be deprecated in a future Astro release. Experimental support for type-checking Astro files with TypeScript 7.1+ is available through @astrojs/ts-content-mapper. See its README for setup instructions:\n' +
+				'https://github.com/withastro/astro/tree/main/packages/language-tools/ts-content-mapper#usage',
+		);
+		return true;
+	}
+
+	// @ts-ignore For some unknown reason, in CI TS isn't able to get the type here even though it works locally.
 	const checkPackage = await getPackage<typeof import('@astrojs/check')>(
 		'@astrojs/check',
 		logger,
@@ -31,11 +45,7 @@ export async function check(flags: Flags) {
 		// NOTE: In the future, `@astrojs/check` can expose a `before lint` hook so that this works during `astro check --watch` too.
 		// For now, we run this once as usually `astro check --watch` is ran alongside `astro dev` which also calls `astro sync`.
 		const { default: sync } = await import('../../core/sync/index.js');
-		try {
-			await sync(flagsToAstroInlineConfig(flags));
-		} catch (_) {
-			return process.exit(1);
-		}
+		await sync(flagsToAstroInlineConfig(flags));
 	}
 
 	const { check: checker, parseArgsAsCheckConfig } = checkPackage;

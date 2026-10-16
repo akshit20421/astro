@@ -1,10 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "include": ["src"],
-  "compilerOptions": {
-    "allowJs": true,
-    "declarationDir": "./dist",
-    "outDir": "./dist",
-    "jsx": "preserve"
-  }
+  "extends": "../../configs/tsconfig.base.json",
+  "files": ["./bin/astro.mjs", "./playwright.config.js", "./playwright.firefox.config.js"],
+  "references": [{ "path": "./tsconfig.build.json" }, { "path": "./tsconfig.test.json" }]
 }

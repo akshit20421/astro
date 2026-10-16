@@ -7,11 +7,10 @@ benchmark/results/
 **/smoke
 **/node_modules
 **/fixtures
+**/fixture
 **/vendor
 **/.vercel
-
-# Short-term need to format
-!packages/db/test/fixtures
+**/.vscode-test
 
 # Directories
 .github
@@ -22,9 +21,14 @@ pnpm-lock.yaml
 
 # Formatted by Biome
 **/*.json
+**/*.jsonc
 **/*.js
 **/*.ts
 **/*.tsx
 **/*.jsx
 **/*.mjs
 **/*.cjs
+**/*.css
+**/*.code-snippets
+
+CHANGELOG.md

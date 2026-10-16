@@ -1,10 +1,10 @@
+import { AstroError, AstroErrorData } from '../../core/errors/index.js';
 import type {
 	AstroComponentMetadata,
 	SSRElement,
 	SSRLoadedRenderer,
 	SSRResult,
-} from '../../@types/astro.js';
-import { AstroError, AstroErrorData } from '../../core/errors/index.js';
+} from '../../types/public/internal.js';
 import { escapeHTML } from './escape.js';
 import { serializeProps } from './serialize.js';
 
@@ -24,7 +24,7 @@ interface ExtractedProps {
 	propsWithoutTransitionAttributes: Props;
 }
 
-const transitionDirectivesToCopyOnIsland = Object.freeze([
+const transitionDirectivesToCopyOnIsland = new Set([
 	'data-astro-transition-scope',
 	'data-astro-transition-persist',
 	'data-astro-transition-persist-props',
@@ -42,7 +42,8 @@ export function extractDirectives(
 		props: {},
 		propsWithoutTransitionAttributes: {},
 	};
-	for (const [key, value] of Object.entries(inputProps)) {
+	for (const key of Object.keys(inputProps)) {
+		const value = inputProps[key];
 		if (key.startsWith('server:')) {
 			if (key === 'server:root') {
 				extracted.isPage = true;
@@ -101,7 +102,7 @@ export function extractDirectives(
 			}
 		} else {
 			extracted.props[key] = value;
-			if (!transitionDirectivesToCopyOnIsland.includes(key)) {
+			if (!transitionDirectivesToCopyOnIsland.has(key)) {
 				extracted.propsWithoutTransitionAttributes[key] = value;
 			}
 		}
@@ -148,7 +149,7 @@ export async function generateHydrateScript(
 	// Attach renderer-provided attributes
 	if (attrs) {
 		for (const [key, value] of Object.entries(attrs)) {
-			island.props[key] = escapeHTML(value);
+			island.props[key] = escapeHTML(String(value));
 		}
 	}
 
@@ -158,7 +159,9 @@ export async function generateHydrateScript(
 	// Add renderer url
 	if (renderer.clientEntrypoint) {
 		island.props['component-export'] = componentExport.value;
-		island.props['renderer-url'] = await result.resolve(decodeURI(renderer.clientEntrypoint));
+		island.props['renderer-url'] = await result.resolve(
+			decodeURI(renderer.clientEntrypoint.toString()),
+		);
 		island.props['props'] = escapeHTML(serializeProps(props, metadata));
 	}
 
@@ -177,7 +180,7 @@ export async function generateHydrateScript(
 
 	transitionDirectivesToCopyOnIsland.forEach((name) => {
 		if (typeof props[name] !== 'undefined') {
-			island.props[name] = props[name];
+			island.props[name] = escapeHTML(String(props[name]));
 		}
 	});
 

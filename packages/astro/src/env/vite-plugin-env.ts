@@ -1,91 +1,128 @@
-import type fsMod from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { type Plugin, loadEnv } from 'vite';
-import type { AstroSettings } from '../@types/astro.js';
+import { readFileSync } from 'node:fs';
+import type { Plugin } from 'vite';
 import { AstroError, AstroErrorData } from '../core/errors/index.js';
+import { isAstroClientEnvironment } from '../environments.js';
+import type { AstroSettings } from '../types/astro.js';
 import {
+	CLIENT_VIRTUAL_MODULE_ID,
+	INTERNAL_VIRTUAL_MODULE_ID,
 	MODULE_TEMPLATE_URL,
-	VIRTUAL_MODULES_IDS,
-	VIRTUAL_MODULES_IDS_VALUES,
+	RESOLVED_CLIENT_VIRTUAL_MODULE_ID,
+	RESOLVED_INTERNAL_VIRTUAL_MODULE_ID,
+	RESOLVED_SERVER_VIRTUAL_MODULE_ID,
+	SERVER_VIRTUAL_MODULE_ID,
 } from './constants.js';
+import type { EnvLoader } from './env-loader.js';
 import { type InvalidVariable, invalidVariablesToError } from './errors.js';
-import { ENV_SYMBOL } from './runtime-constants.js';
 import type { EnvSchema } from './schema.js';
 import { getEnvFieldType, validateEnvVariable } from './validators.js';
 
-interface AstroEnvVirtualModPluginParams {
+interface AstroEnvPluginParams {
 	settings: AstroSettings;
-	mode: 'dev' | 'build' | string;
-	fs: typeof fsMod;
 	sync: boolean;
+	envLoader: EnvLoader;
 }
 
-export function astroEnv({
-	settings,
-	mode,
-	fs,
-	sync,
-}: AstroEnvVirtualModPluginParams): Plugin | undefined {
-	if (!settings.config.experimental.env) {
-		return;
-	}
-	const schema = settings.config.experimental.env.schema ?? {};
-
-	let templates: { client: string; server: string; internal: string } | null = null;
+export function astroEnv({ settings, sync, envLoader }: AstroEnvPluginParams): Plugin {
+	const { schema, validateSecrets } = settings.config.env;
+	let isBuild: boolean;
+	let populated = false;
 
 	return {
 		name: 'astro-env-plugin',
 		enforce: 'pre',
+		config(_, { command }) {
+			isBuild = command === 'build';
+		},
 		buildStart() {
-			const loadedEnv = loadEnv(
-				mode === 'dev' ? 'development' : 'production',
-				fileURLToPath(settings.config.root),
-				'',
-			);
-			(globalThis as any)[ENV_SYMBOL] = loadedEnv;
-
-			const validatedVariables = validatePublicVariables({
-				schema,
-				loadedEnv,
-				validateSecrets: settings.config.experimental.env?.validateSecrets ?? false,
-				sync,
-			});
-
-			templates = {
-				...getTemplates(schema, fs, validatedVariables),
-				internal: `export const schema = ${JSON.stringify(schema)};`,
-			};
-		},
-		buildEnd() {
-			templates = null;
-		},
-		resolveId(id) {
-			if (VIRTUAL_MODULES_IDS_VALUES.has(id)) {
-				return resolveVirtualModuleId(id);
+			if (!isBuild || populated) {
+				return;
 			}
-		},
-		load(id, options) {
-			if (id === resolveVirtualModuleId(VIRTUAL_MODULES_IDS.client)) {
-				return templates!.client;
-			}
-			if (id === resolveVirtualModuleId(VIRTUAL_MODULES_IDS.server)) {
-				if (options?.ssr) {
-					return templates!.server;
+
+			const loadedEnv = envLoader.get();
+
+			// During the build, we populate process.env so that secrets can work
+			for (const [key, value] of Object.entries(loadedEnv)) {
+				if (value !== undefined) {
+					process.env[key] = value;
 				}
-				throw new AstroError({
-					...AstroErrorData.ServerOnlyModule,
-					message: AstroErrorData.ServerOnlyModule.message(VIRTUAL_MODULES_IDS.server),
-				});
 			}
-			if (id === resolveVirtualModuleId(VIRTUAL_MODULES_IDS.internal)) {
-				return templates!.internal;
-			}
+
+			populated = true;
+		},
+		resolveId: {
+			filter: {
+				id: new RegExp(
+					`^(${CLIENT_VIRTUAL_MODULE_ID}|${SERVER_VIRTUAL_MODULE_ID}|${INTERNAL_VIRTUAL_MODULE_ID})$`,
+				),
+			},
+			handler(id) {
+				if (id === CLIENT_VIRTUAL_MODULE_ID) {
+					return RESOLVED_CLIENT_VIRTUAL_MODULE_ID;
+				}
+				if (id === SERVER_VIRTUAL_MODULE_ID) {
+					return RESOLVED_SERVER_VIRTUAL_MODULE_ID;
+				}
+				if (id === INTERNAL_VIRTUAL_MODULE_ID) {
+					return RESOLVED_INTERNAL_VIRTUAL_MODULE_ID;
+				}
+			},
+		},
+		load: {
+			filter: {
+				id: new RegExp(
+					`^(${RESOLVED_CLIENT_VIRTUAL_MODULE_ID}|${RESOLVED_SERVER_VIRTUAL_MODULE_ID}|${RESOLVED_INTERNAL_VIRTUAL_MODULE_ID})$`,
+				),
+			},
+			handler(id) {
+				if (id === RESOLVED_INTERNAL_VIRTUAL_MODULE_ID) {
+					return { code: `export const schema = ${JSON.stringify(schema)};` };
+				}
+
+				if (
+					id === RESOLVED_SERVER_VIRTUAL_MODULE_ID &&
+					isAstroClientEnvironment(this.environment)
+				) {
+					throw new AstroError({
+						...AstroErrorData.ServerOnlyModule,
+						message: AstroErrorData.ServerOnlyModule.message(SERVER_VIRTUAL_MODULE_ID),
+					});
+				}
+
+				if (id === RESOLVED_CLIENT_VIRTUAL_MODULE_ID || id === RESOLVED_SERVER_VIRTUAL_MODULE_ID) {
+					const loadedEnv = envLoader.get();
+
+					const validatedVariables = validatePublicVariables({
+						schema,
+						loadedEnv,
+						validateSecrets,
+						sync,
+					});
+					const { client, server } = getTemplates({
+						schema,
+						validatedVariables,
+						// In dev, we inline process.env to avoid freezing it
+						loadedEnv: isBuild ? null : loadedEnv,
+					});
+
+					if (id === RESOLVED_CLIENT_VIRTUAL_MODULE_ID) {
+						return { code: client };
+					}
+
+					if (id === RESOLVED_SERVER_VIRTUAL_MODULE_ID) {
+						return { code: server };
+					}
+				}
+			},
 		},
 	};
 }
 
-function resolveVirtualModuleId<T extends string>(id: T): `\0${T}` {
-	return `\0${id}`;
+interface ValidVariable {
+	key: string;
+	value: any;
+	type: string;
+	context: 'server' | 'client';
 }
 
 function validatePublicVariables({
@@ -99,7 +136,7 @@ function validatePublicVariables({
 	validateSecrets: boolean;
 	sync: boolean;
 }) {
-	const valid: Array<{ key: string; value: any; type: string; context: 'server' | 'client' }> = [];
+	const valid: Array<ValidVariable> = [];
 	const invalid: Array<InvalidVariable> = [];
 
 	for (const [key, options] of Object.entries(schema)) {
@@ -129,13 +166,19 @@ function validatePublicVariables({
 	return valid;
 }
 
-function getTemplates(
-	schema: EnvSchema,
-	fs: typeof fsMod,
-	validatedVariables: ReturnType<typeof validatePublicVariables>,
-) {
+let cachedServerTemplate: string | undefined;
+
+function getTemplates({
+	schema,
+	validatedVariables,
+	loadedEnv,
+}: {
+	schema: EnvSchema;
+	validatedVariables: Array<ValidVariable>;
+	loadedEnv: Record<string, string> | null;
+}) {
 	let client = '';
-	let server = fs.readFileSync(MODULE_TEMPLATE_URL, 'utf-8');
+	let server = (cachedServerTemplate ??= readFileSync(MODULE_TEMPLATE_URL, 'utf-8'));
 	let onSetGetEnv = '';
 
 	for (const { key, value, context } of validatedVariables) {
@@ -153,10 +196,15 @@ function getTemplates(
 		}
 
 		server += `export let ${key} = _internalGetSecret(${JSON.stringify(key)});\n`;
-		onSetGetEnv += `${key} = reset ? undefined : _internalGetSecret(${JSON.stringify(key)});\n`;
+		onSetGetEnv += `${key} = _internalGetSecret(${JSON.stringify(key)});\n`;
 	}
 
 	server = server.replace('// @@ON_SET_GET_ENV@@', onSetGetEnv);
+	if (loadedEnv) {
+		server = server.replace('// @@GET_ENV@@', `return (${JSON.stringify(loadedEnv)})[key];`);
+	} else {
+		server = server.replace('// @@GET_ENV@@', 'return _getEnv(key);');
+	}
 
 	return {
 		client,

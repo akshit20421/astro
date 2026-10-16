@@ -1,6 +1,6 @@
 {
   "name": "@astrojs/prism",
-  "version": "3.1.0",
+  "version": "4.1.0",
   "description": "Add Prism syntax highlighting support to your Astro site",
   "author": "withastro",
   "type": "module",
@@ -8,13 +8,13 @@
   "bugs": "https://github.com/withastro/astro/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/withastro/astro.git",
+    "url": "git+https://github.com/withastro/astro.git",
     "directory": "packages/astro-prism"
   },
-  "homepage": "https://docs.astro.build/en/reference/api-reference/#prism-",
+  "homepage": "https://docs.astro.build/en/guides/syntax-highlighting/#prism-",
   "main": "dist/index.js",
   "scripts": {
-    "build": "astro-scripts build \"src/**/*.ts\" && tsc -p ./tsconfig.json",
+    "build": "astro-scripts build \"src/**/*.ts\" && tsc -b",
     "build:ci": "astro-scripts build \"src/**/*.ts\"",
     "dev": "astro-scripts dev \"src/**/*.ts\""
   },
@@ -22,6 +22,12 @@
     ".": "./dist/index.js",
     "./Prism.astro": "./Prism.astro",
     "./dist/highlighter": "./dist/highlighter.js"
+  },
+  "imports": {
+    "#prism-loadLanguages": {
+      "workerd": "./dist/loadLanguages-workerd.js",
+      "default": "./dist/loadLanguages-default.js"
+    }
   },
   "files": [
     "dist",
@@ -32,13 +38,13 @@
     "astro-component"
   ],
   "dependencies": {
-    "prismjs": "^1.29.0"
+    "prismjs": "^1.30.0"
   },
   "devDependencies": {
-    "@types/prismjs": "1.26.4",
+    "@types/prismjs": "1.26.6",
     "astro-scripts": "workspace:*"
   },
   "engines": {
-    "node": "^18.17.1 || ^20.3.0 || >=21.0.0"
+    "node": ">=22.22.0"
   }
 }

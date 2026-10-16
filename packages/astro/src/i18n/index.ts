@@ -1,17 +1,18 @@
-import { appendForwardSlash, joinPaths } from '@astrojs/internal-helpers/path';
-import type {
-	APIContext,
-	AstroConfig,
-	Locales,
-	SSRManifest,
-	ValidRedirectStatus,
-} from '../@types/astro.js';
+import {
+	appendForwardSlash,
+	joinPaths,
+	removeTrailingForwardSlash,
+} from '@astrojs/internal-helpers/path';
+import type { RoutingStrategies } from '../core/app/common.js';
+import type { SSRManifest } from '../core/app/types.js';
 import { shouldAppendForwardSlash } from '../core/build/util.js';
-import { REROUTE_DIRECTIVE_HEADER } from '../core/constants.js';
-import { MissingLocale, i18nNoLocaleFoundInPath } from '../core/errors/errors-data.js';
+import { getFetchStateFromAPIContext } from '../core/fetch/fetch-state.js';
+import { i18nNoLocaleFoundInPath, MissingLocale } from '../core/errors/errors-data.js';
 import { AstroError } from '../core/errors/index.js';
+import type { AstroConfig, Locales, ValidRedirectStatus } from '../types/public/config.js';
+import type { APIContext } from '../types/public/context.js';
 import { createI18nMiddleware } from './middleware.js';
-import type { RoutingStrategies } from './utils.js';
+import { normalizeTheLocale, pathHasLocale } from './path.js';
 
 export function requestHasLocale(locales: Locales) {
 	return function (context: APIContext): boolean {
@@ -19,36 +20,12 @@ export function requestHasLocale(locales: Locales) {
 	};
 }
 
-export function requestIs404Or500(request: Request, base = '') {
-	const url = new URL(request.url);
-
-	return url.pathname.startsWith(`${base}/404`) || url.pathname.startsWith(`${base}/500`);
-}
-
-// Checks if the pathname has any locale
-export function pathHasLocale(path: string, locales: Locales): boolean {
-	const segments = path.split('/');
-	for (const segment of segments) {
-		for (const locale of locales) {
-			if (typeof locale === 'string') {
-				if (normalizeTheLocale(segment) === normalizeTheLocale(locale)) {
-					return true;
-				}
-			} else if (segment === locale.path) {
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
 type GetLocaleRelativeUrl = GetLocaleOptions & {
 	locale: string;
 	base: string;
 	locales: Locales;
 	trailingSlash: AstroConfig['trailingSlash'];
-	format: AstroConfig['build']['format'];
+	format: NonNullable<AstroConfig['build']['format']>;
 	strategy?: RoutingStrategies;
 	defaultLocale: string;
 	domains: Record<string, string> | undefined;
@@ -57,7 +34,7 @@ type GetLocaleRelativeUrl = GetLocaleOptions & {
 
 export type GetLocaleOptions = {
 	/**
-	 * Makes the locale URL-friendly by replacing underscores with dashes, and converting the locale to lower case.
+	 * Makes the locale URL-friendly by replacing underscores with dashes, and converting the locale to lowercase.
 	 * @default true
 	 */
 	normalizeLocale?: boolean;
@@ -108,11 +85,17 @@ export function getLocaleRelativeUrl({
 	}
 	pathsToJoin.push(path);
 
+	let relativePath: string;
 	if (shouldAppendForwardSlash(trailingSlash, format)) {
-		return appendForwardSlash(joinPaths(...pathsToJoin));
+		relativePath = appendForwardSlash(joinPaths(...pathsToJoin));
 	} else {
-		return joinPaths(...pathsToJoin);
+		relativePath = removeTrailingForwardSlash(joinPaths(...pathsToJoin));
 	}
+
+	if (relativePath === '') {
+		return '/';
+	}
+	return relativePath;
 }
 
 /**
@@ -126,7 +109,9 @@ export function getLocaleAbsoluteUrl({ site, isBuild, ...rest }: GetLocaleAbsolu
 		const base = domains[locale];
 		url = joinPaths(base, localeUrl.replace(`/${rest.locale}`, ''));
 	} else {
-		if (site) {
+		if (localeUrl === '/') {
+			url = site || '/';
+		} else if (site) {
 			url = joinPaths(site, localeUrl);
 		} else {
 			url = localeUrl;
@@ -218,19 +203,21 @@ export function getLocaleByPath(path: string, locales: Locales): string {
 }
 
 /**
- *
- * Given a locale, this function:
- * - replaces the `_` with a `-`;
- * - transforms all letters to be lower case;
- */
-export function normalizeTheLocale(locale: string): string {
-	return locale.replaceAll('_', '-').toLowerCase();
-}
-
-/**
  * Returns an array of only locales, by picking the `code`
  * @param locales
  */
+export function getAllCodes(locales: Locales): string[] {
+	const result: string[] = [];
+	for (const loopLocale of locales) {
+		if (typeof loopLocale === 'string') {
+			result.push(loopLocale);
+		} else {
+			result.push(...loopLocale.codes);
+		}
+	}
+	return result;
+}
+
 export function toCodes(locales: Locales): string[] {
 	return locales.map((loopLocale) => {
 		if (typeof loopLocale === 'string') {
@@ -302,9 +289,13 @@ export function redirectToDefaultLocale({
 }
 
 // NOTE: public function exported to the users via `astro:i18n` module
-export function notFound({ base, locales }: MiddlewarePayload) {
+export function notFound({ base, locales, fallback }: MiddlewarePayload) {
 	return function (context: APIContext, response?: Response): Response | undefined {
-		if (response?.headers.get(REROUTE_DIRECTIVE_HEADER) === 'no') return response;
+		const fetchState = getFetchStateFromAPIContext(context);
+
+		if (fetchState.skipErrorReroute && typeof fallback === 'undefined') {
+			return response;
+		}
 
 		const url = context.url;
 		// We return a 404 if:
@@ -312,8 +303,8 @@ export function notFound({ base, locales }: MiddlewarePayload) {
 		// - the URL doesn't contain a locale
 		const isRoot = url.pathname === base + '/' || url.pathname === base;
 		if (!(isRoot || pathHasLocale(url.pathname, locales))) {
+			fetchState.skipErrorReroute = true;
 			if (response) {
-				response.headers.set(REROUTE_DIRECTIVE_HEADER, 'no');
 				return new Response(response.body, {
 					status: 404,
 					headers: response.headers,
@@ -321,9 +312,6 @@ export function notFound({ base, locales }: MiddlewarePayload) {
 			} else {
 				return new Response(null, {
 					status: 404,
-					headers: {
-						[REROUTE_DIRECTIVE_HEADER]: 'no',
-					},
 				});
 			}
 		}
@@ -344,7 +332,7 @@ export function redirectToFallback({
 	fallbackType,
 }: MiddlewarePayload) {
 	return async function (context: APIContext, response: Response): Promise<Response> {
-		if (response.status >= 300 && fallback) {
+		if (response.status === 404 && fallback) {
 			const fallbackKeys = fallback ? Object.keys(fallback) : [];
 			// we split the URL using the `/`, and then check in the returned array we have the locale
 			const segments = context.url.pathname.split('/');
@@ -379,9 +367,9 @@ export function redirectToFallback({
 				}
 
 				if (fallbackType === 'rewrite') {
-					return await context.rewrite(newPathname);
+					return await context.rewrite(newPathname + context.url.search);
 				} else {
-					return context.redirect(newPathname);
+					return context.redirect(newPathname + context.url.search);
 				}
 			}
 		}

@@ -1,4 +1,12 @@
-import { decodeBase64, decodeHex, encodeBase64, encodeHexUpperCase } from '@oslojs/encoding';
+import {
+	decodeBase64,
+	decodeHex,
+	encodeBase64,
+	encodeHexLowerCase,
+	encodeHexUpperCase,
+} from '@oslojs/encoding';
+import type { CspAlgorithm } from '../types/public/index.js';
+import { ALGORITHMS, type CspHash } from './csp/config.js';
 
 // Chose this algorithm for no particular reason, can change.
 // This algo does check against text manipulation though. See
@@ -26,7 +34,7 @@ const ENVIRONMENT_KEY_NAME = 'ASTRO_KEY' as const;
 /**
  * Get the encoded value of the ASTRO_KEY env var.
  */
-export function getEncodedEnvironmentKey(): string {
+function getEncodedEnvironmentKey(): string {
 	return process.env[ENVIRONMENT_KEY_NAME] || '';
 }
 
@@ -52,11 +60,14 @@ export async function getEnvironmentKey(): Promise<CryptoKey> {
 }
 
 /**
- * Takes a key that has been serialized to an array of bytes and returns a CryptoKey
+ * Hash a CryptoKey into a one-way hex digest safe to persist. Server-island
+ * ciphertext is bound to the key, so the incremental build cache uses this to
+ * detect when the key changed between builds.
  */
-export async function importKey(bytes: Uint8Array): Promise<CryptoKey> {
-	const key = await crypto.subtle.importKey('raw', bytes, ALGORITHM, true, ['encrypt', 'decrypt']);
-	return key;
+export async function hashCryptoKey(key: CryptoKey): Promise<string> {
+	const exported = await crypto.subtle.exportKey('raw', key);
+	const digest = await crypto.subtle.digest('SHA-256', exported);
+	return encodeHexLowerCase(new Uint8Array(digest));
 }
 
 /**
@@ -73,7 +84,10 @@ export async function encodeKey(key: CryptoKey) {
  */
 export async function decodeKey(encoded: string): Promise<CryptoKey> {
 	const bytes = decodeBase64(encoded);
-	return crypto.subtle.importKey('raw', bytes, ALGORITHM, true, ['encrypt', 'decrypt']);
+	return crypto.subtle.importKey('raw', bytes.buffer as ArrayBuffer, ALGORITHM, true, [
+		'encrypt',
+		'decrypt',
+	]);
 }
 
 const encoder = new TextEncoder();
@@ -84,36 +98,57 @@ const IV_LENGTH = 24;
 
 /**
  * Using a CryptoKey, encrypt a string into a base64 string.
+ * @param additionalData Optional authenticated context (e.g. "props:ComponentName") that is
+ *   verified during decryption but not included in the ciphertext. Both sides must agree on
+ *   the same value or decryption will fail.
  */
-export async function encryptString(key: CryptoKey, raw: string) {
+export async function encryptString(key: CryptoKey, raw: string, additionalData?: string) {
 	const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH / 2));
 	const data = encoder.encode(raw);
-	const buffer = await crypto.subtle.encrypt(
-		{
-			name: ALGORITHM,
-			iv,
-		},
-		key,
-		data,
-	);
+	const params: AesGcmParams = { name: ALGORITHM, iv };
+	if (additionalData) {
+		params.additionalData = encoder.encode(additionalData);
+	}
+	const buffer = await crypto.subtle.encrypt(params, key, data);
 	// iv is 12, hex brings it to 24
 	return encodeHexUpperCase(iv) + encodeBase64(new Uint8Array(buffer));
 }
 
 /**
  * Takes a base64 encoded string, decodes it and returns the decrypted text.
+ * @param additionalData Must match the value used during encryption, or decryption will fail.
  */
-export async function decryptString(key: CryptoKey, encoded: string) {
-	const iv = decodeHex(encoded.slice(0, IV_LENGTH));
-	const dataArray = decodeBase64(encoded.slice(IV_LENGTH));
-	const decryptedBuffer = await crypto.subtle.decrypt(
-		{
-			name: ALGORITHM,
-			iv,
-		},
-		key,
-		dataArray,
-	);
+export async function decryptString(key: CryptoKey, encoded: string, additionalData?: string) {
+	const iv = decodeHex(encoded.slice(0, IV_LENGTH)) as Uint8Array<ArrayBuffer>;
+	const dataArray = decodeBase64(encoded.slice(IV_LENGTH)) as Uint8Array<ArrayBuffer>;
+	const params: AesGcmParams = { name: ALGORITHM, iv };
+	if (additionalData) {
+		params.additionalData = encoder.encode(additionalData);
+	}
+	const decryptedBuffer = await crypto.subtle.decrypt(params, key, dataArray);
 	const decryptedString = decoder.decode(decryptedBuffer);
 	return decryptedString;
+}
+
+/**
+ * Generates an SHA-256 digest of the given string.
+ * @param {string} data The string to hash.
+ * @param {CspAlgorithm} algorithm The algorithm to use.
+ */
+export async function generateCspDigest(data: string, algorithm: CspAlgorithm): Promise<CspHash> {
+	const hashBuffer = await crypto.subtle.digest(algorithm, encoder.encode(data));
+
+	const hash = encodeBase64(new Uint8Array(hashBuffer));
+	return `${ALGORITHMS[algorithm]}${hash}`;
+}
+
+/**
+ * Generate SHA-256 hash of buffer.
+ * @param {ArrayBuffer} data The buffer data to hash
+ * @returns {Promise<string>} A hex string of the first 16 characters of the SHA-256 hash
+ */
+export async function generateContentHash(data: ArrayBuffer): Promise<string> {
+	const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+	const hashArray = new Uint8Array(hashBuffer);
+	return encodeBase64(hashArray);
 }

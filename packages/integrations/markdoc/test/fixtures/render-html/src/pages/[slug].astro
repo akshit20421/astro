@@ -1,15 +1,15 @@
 ---
-import { getCollection, getEntryBySlug } from "astro:content";
+import { getCollection, getEntry, render } from "astro:content";
 
 const { slug } = Astro.params;
 
-const post = await getEntryBySlug('blog', slug);
-const { Content } = await post.render();
+const post = await getEntry('blog', slug);
+const { Content } = await render(post);
 
 export async function getStaticPaths() {
   const blogEntries = await getCollection('blog');
   return blogEntries.map(entry => ({
-    params: { slug: entry.slug }, props: { entry },
+    params: { slug: entry.id }, props: { entry },
   }));
 }
 
@@ -18,8 +18,7 @@ export async function getStaticPaths() {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Content</title>
 </head>

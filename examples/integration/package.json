@@ -1,6 +1,9 @@
 {
   "name": "@example/integration",
   "private": true,
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "version": "0.0.1",
   "type": "module",
   "exports": {
@@ -15,7 +18,7 @@
   ],
   "scripts": {},
   "devDependencies": {
-    "astro": "^4.16.6"
+    "astro": "^7.4.0"
   },
   "peerDependencies": {
     "astro": "^4.0.0"

@@ -1,8 +1,7 @@
 ---
+import { signal } from '@preact/signals';
 // Component Imports
 import Counter from '../components/Counter';
-
-import { signal } from '@preact/signals';
 
 // Full Astro Component Syntax:
 // https://docs.astro.build/basics/astro-components/
@@ -16,6 +15,7 @@ const count = signal(0);
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
 		<style>
 			html,
 			body {

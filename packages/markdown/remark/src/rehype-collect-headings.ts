@@ -3,19 +3,25 @@ import Slugger from 'github-slugger';
 import type { MdxTextExpression } from 'mdast-util-mdx-expression';
 import type { Node } from 'unist';
 import { visit } from 'unist-util-visit';
+import type { VFile } from 'vfile';
+import type { MarkdownHeading, RehypePlugin } from '@astrojs/internal-helpers/markdown';
 
-import { InvalidAstroDataError, safelyGetAstroData } from './frontmatter-injection.js';
-import type { MarkdownAstroData, MarkdownHeading, MarkdownVFile, RehypePlugin } from './types.js';
+import { FORBIDDEN_PATH_KEYS } from '@astrojs/internal-helpers/object';
 
 const rawNodeTypes = new Set(['text', 'raw', 'mdxTextExpression']);
 const codeTagNames = new Set(['code', 'pre']);
 
+/**
+ * Rehype plugin that adds `id` attributes to headings based on their text content.
+ *
+ * @see https://docs.astro.build/en/guides/markdown-content/#heading-ids-and-plugins
+ */
 export function rehypeHeadingIds(): ReturnType<RehypePlugin> {
-	return function (tree, file: MarkdownVFile) {
+	return function (tree, file) {
 		const headings: MarkdownHeading[] = [];
+		const frontmatter = file.data.astro?.frontmatter;
 		const slugger = new Slugger();
 		const isMDX = isMDXFile(file);
-		const astroData = safelyGetAstroData(file.data);
 		visit(tree, (node) => {
 			if (node.type !== 'element') return;
 			const { tagName } = node;
@@ -34,13 +40,16 @@ export function rehypeHeadingIds(): ReturnType<RehypePlugin> {
 						return;
 					}
 				}
-				if (rawNodeTypes.has(child.type)) {
-					if (isMDX || codeTagNames.has(parent.tagName)) {
+				if (rawNodeTypes.has(child.type) && 'value' in child) {
+					if (isMDX || ('tagName' in parent && codeTagNames.has(parent.tagName))) {
 						let value = child.value;
-						if (isMdxTextExpression(child) && !(astroData instanceof InvalidAstroDataError)) {
+						if (isMdxTextExpression(child) && frontmatter) {
 							const frontmatterPath = getMdxFrontmatterVariablePath(child);
 							if (Array.isArray(frontmatterPath) && frontmatterPath.length > 0) {
-								const frontmatterValue = getMdxFrontmatterVariableValue(astroData, frontmatterPath);
+								const frontmatterValue = getMdxFrontmatterVariableValue(
+									frontmatter,
+									frontmatterPath,
+								);
 								if (typeof frontmatterValue === 'string') {
 									value = frontmatterValue;
 								}
@@ -55,21 +64,18 @@ export function rehypeHeadingIds(): ReturnType<RehypePlugin> {
 
 			node.properties = node.properties || {};
 			if (typeof node.properties.id !== 'string') {
-				let slug = slugger.slug(text);
-
-				if (slug.endsWith('-')) slug = slug.slice(0, -1);
-
-				node.properties.id = slug;
+				node.properties.id = slugger.slug(text);
 			}
 
 			headings.push({ depth, slug: node.properties.id, text });
 		});
 
-		file.data.__astroHeadings = headings;
+		file.data.astro ??= {};
+		file.data.astro.headings = headings;
 	};
 }
 
-function isMDXFile(file: MarkdownVFile) {
+function isMDXFile(file: VFile) {
 	return Boolean(file.history[0]?.endsWith('.mdx'));
 }
 
@@ -109,11 +115,18 @@ function getMdxFrontmatterVariablePath(node: MdxTextExpression): string[] | Erro
 	return expressionPath.reverse();
 }
 
-function getMdxFrontmatterVariableValue(astroData: MarkdownAstroData, path: string[]) {
-	let value: MdxFrontmatterVariableValue = astroData.frontmatter;
+function getMdxFrontmatterVariableValue(frontmatter: Record<string, any>, path: string[]) {
+	let value = frontmatter;
 
 	for (const key of path) {
-		if (!value[key]) return undefined;
+		if (
+			FORBIDDEN_PATH_KEYS.has(key) ||
+			!value ||
+			typeof value !== 'object' ||
+			!Object.hasOwn(value, key)
+		) {
+			return undefined;
+		}
 
 		value = value[key];
 	}
@@ -124,6 +137,3 @@ function getMdxFrontmatterVariableValue(astroData: MarkdownAstroData, path: stri
 function isMdxTextExpression(node: Node): node is MdxTextExpression {
 	return node.type === 'mdxTextExpression';
 }
-
-type MdxFrontmatterVariableValue =
-	MarkdownAstroData['frontmatter'][keyof MarkdownAstroData['frontmatter']];

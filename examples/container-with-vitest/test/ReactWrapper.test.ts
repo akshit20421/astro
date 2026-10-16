@@ -1,5 +1,5 @@
 import { loadRenderers } from 'astro:container';
-import { getContainerRenderer } from '@astrojs/react';
+import { getContainerRenderer } from '@astrojs/react/container-renderer';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { expect, test } from 'vitest';
 import ReactWrapper from '../src/components/ReactWrapper.astro';
@@ -14,4 +14,7 @@ test('ReactWrapper with react renderer', async () => {
 
 	expect(result).toContain('Counter');
 	expect(result).toContain('Count: <!-- -->5');
+	expect(result, 'Includes client hydration reference').toContain(
+		'renderer-url="@astrojs/react/client.js"',
+	);
 });

@@ -11,16 +11,23 @@ export {
 	markHTMLString,
 	unescapeHTML,
 } from './escape.js';
+
 export { renderJSX } from './jsx.js';
+export type {
+	AstroComponentFactory,
+	AstroComponentInstance,
+	ComponentSlots,
+	RenderInstruction,
+} from './render/index.js';
 export {
 	addAttribute,
+	chunkToString,
 	createHeadAndContent,
 	defineScriptVars,
 	Fragment,
 	maybeRenderHead,
-	renderTemplate as render,
-	renderComponent,
 	Renderer as Renderer,
+	renderComponent,
 	renderHead,
 	renderHTMLElement,
 	renderPage,
@@ -28,21 +35,19 @@ export {
 	renderScriptElement,
 	renderSlot,
 	renderSlotToString,
+	renderStreaming,
+	renderTemplate as render,
 	renderTemplate,
 	renderToString,
 	renderUniqueStylesheet,
 	voidElementNames,
 } from './render/index.js';
-export type {
-	AstroComponentFactory,
-	AstroComponentInstance,
-	ComponentSlots,
-	RenderInstruction,
-} from './render/index.js';
+export type { ServerIslandComponent } from './render/server-islands.js';
+export { templateEnter, templateExit } from './render/template-depth.js';
 export { createTransitionScope, renderTransition } from './transition.js';
 
 import { markHTMLString } from './escape.js';
-import { Renderer, addAttribute } from './render/index.js';
+import { addAttribute, Renderer } from './render/index.js';
 
 export function mergeSlots(...slotted: unknown[]) {
 	const slots: Record<string, () => any> = {};
@@ -57,7 +62,7 @@ export function mergeSlots(...slotted: unknown[]) {
 	return slots;
 }
 
-/** @internal Associate JSX components with a specific renderer (see /src/vite-plugin-jsx/tag.ts) */
+/** @internal Associate JSX components with a specific renderer (see /packages/integrations/mdx/src/vite-plugin-mdx-postprocess.ts) */
 export function __astro_tag_component__(Component: unknown, rendererName: string) {
 	if (!Component) return;
 	if (typeof Component !== 'function') return;
@@ -85,8 +90,8 @@ export function spreadAttributes(
 			values.class = scopedClassName;
 		}
 	}
-	for (const [key, value] of Object.entries(values)) {
-		output += addAttribute(value, key, true);
+	for (const key of Object.keys(values)) {
+		output += addAttribute(values[key], key, true, _name);
 	}
 	return markHTMLString(output);
 }

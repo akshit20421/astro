@@ -1,24 +1,26 @@
+import nodeFs from 'node:fs';
 import type * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { AstroInlineConfig, AstroSettings } from '../../@types/astro.js';
-
-import nodeFs from 'node:fs';
 import * as vite from 'vite';
-import { injectImageEndpoint } from '../../assets/endpoint/config.js';
 import {
 	runHookConfigDone,
 	runHookConfigSetup,
 	runHookServerDone,
 	runHookServerStart,
 } from '../../integrations/hooks.js';
+import type { AstroSettings } from '../../types/astro.js';
+import type { AstroInlineConfig } from '../../types/public/config.js';
+import { devServerAppReadySymbol } from '../constants.js';
 import { createVite } from '../create-vite.js';
-import type { Logger } from '../logger/core.js';
-import { apply as applyPolyfill } from '../polyfill.js';
+import type { AstroLogger } from '../logger/core.js';
+import { createRoutesList } from '../routing/create-manifest.js';
+import { getPrerenderDefault } from '../../prerender/utils.js';
 import { syncInternal } from '../sync/index.js';
+import { warnMissingAdapter } from './adapter-validation.js';
 
 export interface Container {
 	fs: typeof nodeFs;
-	logger: Logger;
+	logger: AstroLogger;
 	settings: AstroSettings;
 	viteServer: vite.ViteDevServer;
 	inlineConfig: AstroInlineConfig;
@@ -27,8 +29,8 @@ export interface Container {
 	close: () => Promise<void>;
 }
 
-export interface CreateContainerParams {
-	logger: Logger;
+interface CreateContainerParams {
+	logger: AstroLogger;
 	settings: AstroSettings;
 	inlineConfig?: AstroInlineConfig;
 	isRestart?: boolean;
@@ -43,7 +45,6 @@ export async function createContainer({
 	fs = nodeFs,
 }: CreateContainerParams): Promise<Container> {
 	// Initialize
-	applyPolyfill();
 	settings = await runHookConfigSetup({
 		settings,
 		command: 'dev',
@@ -51,11 +52,9 @@ export async function createContainer({
 		isRestart,
 	});
 
-	settings = injectImageEndpoint(settings, 'dev');
-
 	const {
 		base,
-		server: { host, headers, open: serverOpen },
+		server: { host, headers, open: serverOpen, allowedHosts, port },
 	} = settings.config;
 
 	// serverOpen = true, isRestart = false
@@ -67,7 +66,7 @@ export async function createContainer({
 	// expected behavior: do not spawn a new tab
 	// ------------------------------------------------------
 	// Non-config files don't reach this point
-	const isServerOpenURL = typeof serverOpen == 'string' && !isRestart;
+	const isServerOpenURL = typeof serverOpen === 'string' && !isRestart;
 	const isServerOpenBoolean = serverOpen && !isRestart;
 
 	// Open server to the correct path. We pass the `base` here as we didn't pass the
@@ -80,27 +79,60 @@ export async function createContainer({
 		.map((r) => r.clientEntrypoint)
 		.filter(Boolean) as string[];
 
+	// Set the initial buildOutput default before runHookConfigDone, so that
+	// setAdapter() inside astro:config:done can upgrade it to 'server'.
+	// This matches the ordering in the build path (packages/astro/src/core/build/index.ts).
+	if (!settings.adapter?.adapterFeatures?.buildOutput) {
+		settings.buildOutput = getPrerenderDefault(settings.config) ? 'static' : 'server';
+	}
+
+	// Create the route manifest already outside of Vite so that `runHookConfigDone` can use it to inform integrations of the build output
+	await runHookConfigDone({ settings, logger, command: 'dev' });
+
+	warnMissingAdapter(logger, settings);
+
+	const mode = inlineConfig?.mode ?? 'development';
+	const initialRoutesList = await createRoutesList(
+		{
+			settings,
+			fsMod: nodeFs,
+		},
+		logger,
+		{
+			dev: true,
+		},
+	);
 	const viteConfig = await createVite(
 		{
-			mode: 'development',
-			server: { host, headers, open },
+			server: { host, headers, open, allowedHosts, port },
 			optimizeDeps: {
 				include: rendererClientEntries,
 			},
 		},
-		{ settings, logger, mode: 'dev', command: 'dev', fs, sync: false },
+		{
+			settings,
+			logger,
+			mode,
+			command: 'dev',
+			fs,
+			sync: false,
+			routesList: initialRoutesList,
+		},
 	);
-	await runHookConfigDone({ settings, logger });
+	const viteServer = await vite.createServer(viteConfig);
+
 	await syncInternal({
 		settings,
+		mode,
 		logger,
 		skip: {
-			content: true,
+			content: !isRestart,
+			cleanup: true,
 		},
 		force: inlineConfig?.force,
+		command: 'dev',
+		watcher: viteServer.watcher,
 	});
-
-	const viteServer = await vite.createServer(viteConfig);
 
 	const container: Container = {
 		inlineConfig: inlineConfig ?? {},
@@ -112,7 +144,6 @@ export async function createContainer({
 		handle(req, res) {
 			viteServer.middlewares.handle(req, res, Function.prototype);
 		},
-		// TODO deprecate and remove
 		close() {
 			return closeContainer(container);
 		},
@@ -122,6 +153,10 @@ export async function createContainer({
 }
 
 async function closeContainer({ viteServer, settings, logger }: Container) {
+	// Background app setup uses the runnable environment's module runner. Let it
+	// settle before Vite disconnects that runner so shutdown cannot strand an
+	// in-flight module import.
+	await (viteServer as any)[devServerAppReadySymbol];
 	await viteServer.close();
 	await runHookServerDone({
 		config: settings.config,

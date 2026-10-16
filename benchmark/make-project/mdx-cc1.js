@@ -8,10 +8,12 @@ export async function run(projectDir) {
 	await fs.rm(projectDir, { recursive: true, force: true });
 	await fs.mkdir(new URL('./src/pages/blog', projectDir), { recursive: true });
 	await fs.mkdir(new URL('./src/content/blog', projectDir), { recursive: true });
-	await fs.copyFile(new URL('./image.jpg', import.meta.url), new URL('./src/image.jpg', projectDir));
+	await fs.copyFile(
+		new URL('./image.jpg', import.meta.url),
+		new URL('./src/image.jpg', projectDir),
+	);
 
 	const promises = [];
-
 
 	for (let i = 0; i < 10000; i++) {
 		const content = `\
@@ -24,32 +26,50 @@ ${loremIpsumMd}
 
 `;
 		promises.push(
-			fs.writeFile(new URL(`./src/content/blog/article-${i}.mdx`, projectDir), content, 'utf-8')
+			fs.writeFile(new URL(`./src/content/blog/article-${i}.mdx`, projectDir), content, 'utf-8'),
 		);
 	}
-
 
 	await fs.writeFile(
 		new URL(`./src/pages/blog/[...slug].astro`, projectDir),
 		`\
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 export async function getStaticPaths() {
   const blogEntries = await getCollection('blog');
   return blogEntries.map(entry => ({
-    params: { slug: entry.slug }, props: { entry },
+    params: { slug: entry.id }, props: { entry },
   }));
 }
 const { entry } = Astro.props;
-const { Content } = await entry.render();
+const { Content } = await render(entry);
 ---
 <h1>{entry.data.title}</h1>
 <Content />
 `,
-		'utf-8'
+		'utf-8',
 	);
 
 	await Promise.all(promises);
+
+	await fs.writeFile(
+		new URL(`./src/content.config.ts`, projectDir),
+		`\
+import { defineCollection } from 'astro:content';
+import { z } from 'astro/zod';
+import { glob } from 'astro/loaders';
+
+const blog = defineCollection({
+	loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/blog' }),
+	schema: z.object({
+		title: z.string(),
+	}),
+});
+
+export const collections = { blog };
+`,
+		'utf-8',
+	);
 
 	await fs.writeFile(
 		new URL('./astro.config.js', projectDir),
@@ -61,6 +81,6 @@ import mdx from '@astrojs/mdx';
 export default defineConfig({
   integrations: [mdx()],
 });`,
-		'utf-8'
+		'utf-8',
 	);
 }

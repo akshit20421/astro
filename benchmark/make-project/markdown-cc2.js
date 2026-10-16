@@ -23,14 +23,15 @@ ${loremIpsumMd}
 
 `;
 		promises.push(
-			fs.writeFile(new URL(`./data/blog/article-${i}.md`, projectDir), content, 'utf-8')
+			fs.writeFile(new URL(`./data/blog/article-${i}.md`, projectDir), content, 'utf-8'),
 		);
 	}
 
 	await fs.writeFile(
-		new URL(`./src/content/config.ts`, projectDir),
+		new URL(`./src/content.config.ts`, projectDir),
 		/*ts */ `
-		import { defineCollection, z } from 'astro:content';
+		import { defineCollection } from 'astro:content';
+		import { z } from 'astro/zod';
 		import { glob } from 'astro/loaders';
 
 		const blog = defineCollection({
@@ -39,7 +40,7 @@ ${loremIpsumMd}
 		
 		export const collections = { blog }
 
-		`
+		`,
 	);
 
 	await fs.writeFile(
@@ -60,7 +61,7 @@ const { Content } = await render(entry);
 <h1>{entry.data.title}</h1>
 <Content />
 `,
-		'utf-8'
+		'utf-8',
 	);
 
 	await Promise.all(promises);
@@ -70,11 +71,7 @@ const { Content } = await render(entry);
 		`\
 import { defineConfig } from 'astro/config';
 
-export default defineConfig({
-		experimental: {
-			contentLayer: true
-		}
-});`,
-		'utf-8'
+export default defineConfig({});`,
+		'utf-8',
 	);
 }

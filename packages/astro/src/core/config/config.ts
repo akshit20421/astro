@@ -1,18 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as colors from 'kleur/colors';
-import { ZodError } from 'zod';
+import colors from 'piccolore';
+import { $ZodError } from 'zod/v4/core';
+import { eventConfigError, telemetry } from '../../events/index.js';
 import type {
 	AstroConfig,
 	AstroInlineConfig,
 	AstroInlineOnlyConfig,
 	AstroUserConfig,
-} from '../../@types/astro.js';
-import { eventConfigError, telemetry } from '../../events/index.js';
+} from '../../types/public/config.js';
 import { trackAstroConfigZodError } from '../errors/errors.js';
 import { AstroError, AstroErrorData } from '../errors/index.js';
-import { formatConfigErrorMessage } from '../messages.js';
+import { formatConfigErrorMessage } from '../messages/runtime.js';
 import { mergeConfig } from './merge.js';
 import { validateConfig } from './validate.js';
 import { loadConfigWithVite } from './vite-load.js';
@@ -24,15 +24,13 @@ export function resolveRoot(cwd?: string | URL): string {
 	return cwd ? path.resolve(cwd) : process.cwd();
 }
 
-// Config paths to search for. In order of likely appearance
-// to speed up the check.
-export const configPaths = Object.freeze([
+// Config paths to search for.
+// In order of likely appearance to speed up the check.
+const configPaths = Object.freeze([
 	'astro.config.mjs',
 	'astro.config.js',
 	'astro.config.ts',
 	'astro.config.mts',
-	'astro.config.cjs',
-	'astro.config.cts',
 ]);
 
 async function search(fsMod: typeof fs, root: string) {
@@ -52,7 +50,7 @@ interface ResolveConfigPathOptions {
 }
 
 /**
- * Resolve the file URL of the user's `astro.config.js|cjs|mjs|ts` file
+ * Resolve the file URL of the user's `astro.config.js|mjs|ts` file
  */
 export async function resolveConfigPath(
 	options: ResolveConfigPathOptions,
@@ -110,13 +108,14 @@ function splitInlineConfig(inlineConfig: AstroInlineConfig): {
 	inlineUserConfig: AstroUserConfig;
 	inlineOnlyConfig: AstroInlineOnlyConfig;
 } {
-	const { configFile, mode, logLevel, ...inlineUserConfig } = inlineConfig;
+	const { configFile, mode, logLevel, _logger, ...inlineUserConfig } = inlineConfig;
 	return {
 		inlineUserConfig,
 		inlineOnlyConfig: {
 			configFile,
 			mode,
 			logLevel,
+			_logger,
 		},
 	};
 }
@@ -153,7 +152,7 @@ export async function resolveConfig(
 		astroConfig = await validateConfig(mergedConfig, root, command);
 	} catch (e) {
 		// Improve config zod error messages
-		if (e instanceof ZodError) {
+		if (e instanceof $ZodError) {
 			// Mark this error so the callee can decide to suppress Zod's error if needed.
 			// We still want to throw the error to signal an error in validation.
 			trackAstroConfigZodError(e);

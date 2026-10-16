@@ -23,15 +23,15 @@ ${loremIpsumMd}
 
 `;
 		promises.push(
-			fs.writeFile(new URL(`./data/blog/article-${i}.mdx`, projectDir), content, 'utf-8')
+			fs.writeFile(new URL(`./data/blog/article-${i}.mdx`, projectDir), content, 'utf-8'),
 		);
 	}
 
 	await fs.writeFile(
-		new URL(`./src/content/config.ts`, projectDir),
+		new URL(`./src/content.config.ts`, projectDir),
 		/*ts */ `
-		import { defineCollection, z } from 'astro:content';
-		import { glob } from 'astro/loaders';
+		import { defineCollection } from 'astro:content';
+		import { z } from 'astro/zod';
 
 		const blog = defineCollection({
 			loader: glob({ pattern: '*', base: './data/blog' }),
@@ -39,7 +39,7 @@ ${loremIpsumMd}
 		
 		export const collections = { blog }
 
-		`
+		`,
 	);
 
 	await fs.writeFile(
@@ -60,7 +60,7 @@ const { Content } = await render(entry);
 <h1>{entry.data.title}</h1>
 <Content />
 `,
-		'utf-8'
+		'utf-8',
 	);
 
 	await Promise.all(promises);
@@ -74,10 +74,7 @@ import mdx from '@astrojs/mdx';
 
 export default defineConfig({
   integrations: [mdx()],
-		experimental: {
-			contentLayer: true
-		}
 });`,
-		'utf-8'
+		'utf-8',
 	);
 }

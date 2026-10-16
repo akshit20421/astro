@@ -1,19 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { appendForwardSlash } from '../path.js';
 
 const isWindows = process.platform === 'win32';
 
-export function removeEmptyDirs(root: URL): void {
-	const dir = fileURLToPath(root);
+export function removeEmptyDirs(dir: string): void {
 	if (!fs.statSync(dir).isDirectory()) return;
 	let files = fs.readdirSync(dir);
 
 	if (files.length > 0) {
 		files.map((file) => {
-			const url = new URL(`./${file}`, appendForwardSlash(root.toString()));
-			removeEmptyDirs(url);
+			removeEmptyDirs(path.join(dir, file));
 		});
 		files = fs.readdirSync(dir);
 	}
@@ -21,6 +18,18 @@ export function removeEmptyDirs(root: URL): void {
 	if (files.length === 0) {
 		fs.rmdirSync(dir);
 	}
+}
+
+/**
+ * Copies a cached file to `destination`, giving the copy the source file's
+ * access and modification times so restored output reflects when it was cached.
+ */
+export async function copyCachedFile(source: fs.PathLike, destination: fs.PathLike): Promise<void> {
+	await fs.promises.copyFile(source, destination, fs.constants.COPYFILE_FICLONE);
+	// `copyFile` only keeps timestamps where the clone preserves them (macOS),
+	// so they are set explicitly for consistent output across platforms (#18402).
+	const { atime, mtime } = await fs.promises.stat(source);
+	await fs.promises.utimes(destination, atime, mtime);
 }
 
 export function emptyDir(_dir: URL, skip?: Set<string>): void {
@@ -66,7 +75,7 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-const fixWinEPERMSync = (p: string, options: fs.RmDirOptions, er: any) => {
+const fixWinEPERMSync = (p: string, options: fs.RmOptions, er: any) => {
 	try {
 		fs.chmodSync(p, 0o666);
 	} catch (er2: any) {
@@ -89,7 +98,7 @@ const fixWinEPERMSync = (p: string, options: fs.RmDirOptions, er: any) => {
 	}
 
 	if (stats.isDirectory()) {
-		fs.rmdirSync(p, options);
+		fs.rmSync(p, options);
 	} else {
 		fs.unlinkSync(p);
 	}

@@ -1,5 +1,268 @@
 # create-astro
 
+## 5.3.0
+
+### Minor Changes
+
+- [#18277](https://github.com/withastro/astro/pull/18277) [`2715958`](https://github.com/withastro/astro/commit/2715958666b0a706b069d0592da3a070b3796a9b) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases the minimum Node.js version to 22.22.0
+  
+  The minimum supported Node.js version is now 22.22.0, the latest Node.js 22 release supported by StackBlitz. This change is in line with Astro's [Node.js support policy](https://docs.astro.build/en/upgrade-astro/#support).
+
+### Patch Changes
+
+- [#18218](https://github.com/withastro/astro/pull/18218) [`acc0460`](https://github.com/withastro/astro/commit/acc0460886e43b467852696cf710b04de558503b) Thanks [@KTrain5169](https://github.com/KTrain5169)! - `create-astro` no longer places a `CLAUDE.md` in projects, as Claude Code now supports `AGENTS.md`.
+
+## 5.2.6
+
+### Patch Changes
+
+- [#18263](https://github.com/withastro/astro/pull/18263) [`882dd98`](https://github.com/withastro/astro/commit/882dd98cd9f11c4e7bd0b812d37f865dfca75d3d) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Removes the automatic `allowScripts` and `allowBuilds` pre-approval from generated projects. Astro's dependencies no longer run install scripts, so the workaround is no longer needed.
+
+## 5.2.5
+
+### Patch Changes
+
+- [#18210](https://github.com/withastro/astro/pull/18210) [`62b13ba`](https://github.com/withastro/astro/commit/62b13ba3e0068057a47fbfc2ab8842b263c68f0d) Thanks [@edmundhung](https://github.com/edmundhung)! - Allows Astro CLI commands to install tagged package versions
+
+## 5.2.4
+
+### Patch Changes
+
+- [#17756](https://github.com/withastro/astro/pull/17756) [`f88c875`](https://github.com/withastro/astro/commit/f88c875c2c89af3b8cbb9f9eebdcddde6e0645c8) Thanks [@astro-factory](https://github.com/apps/astro-factory)! - Fixes `npm install` warnings on npm v11+ about esbuild's install scripts not being covered by `allowScripts`. Adds `ensureNpmScriptsAllowed()` to pre-approve esbuild in `package.json` before running `npm install`, matching the existing pnpm v11 compatibility fix.
+
+## 5.2.3
+
+### Patch Changes
+
+- [#17423](https://github.com/withastro/astro/pull/17423) [`08e8adb`](https://github.com/withastro/astro/commit/08e8adb697a54c728735ae8c89acc4b87ee0b7f0) Thanks [@astrobot-houston](https://github.com/astrobot-houston)! - Fixes `create-astro` silently writing template files to the wrong directory on Linux when the path contains non-ASCII characters.
+
+## 5.2.2
+
+### Patch Changes
+
+- [#17259](https://github.com/withastro/astro/pull/17259) [`ed6bea5`](https://github.com/withastro/astro/commit/ed6bea5ad9ff6036f7bc26cfbcb6f999142d16ef) Thanks [@astrobot-houston](https://github.com/astrobot-houston)! - Fixes proxy support by respecting `HTTP_PROXY` and `HTTPS_PROXY` environment variables when downloading templates. On Node.js v22.21.0+ and v24.5.0+, `create-astro` now automatically enables the `--use-env-proxy` flag so that native `fetch()` routes requests through the configured proxy.
+
+## 5.2.1
+
+### Patch Changes
+
+- [#17205](https://github.com/withastro/astro/pull/17205) [`e37dfe2`](https://github.com/withastro/astro/commit/e37dfe2a7623acd364d7e3556ecc9b31e3e45520) Thanks [@astrobot-houston](https://github.com/astrobot-houston)! - Fixes dependency installation when creating Astro projects with pnpm 11+
+
+## 5.2.0
+
+### Minor Changes
+
+- [#17185](https://github.com/withastro/astro/pull/17185) [`d64b09b`](https://github.com/withastro/astro/commit/d64b09bd007d919c15ea3405a52ae550b55400b5) Thanks [@delucis](https://github.com/delucis)! - Adds a `--no-ai` flag to allow users to opt out of creating `AGENTS.md` and `CLAUDE.md` files when running create astro
+
+## 5.1.0
+
+### Minor Changes
+
+- [#17122](https://github.com/withastro/astro/pull/17122) [`cbd6123`](https://github.com/withastro/astro/commit/cbd6123f072190df9c6bd49f5baf0e248e521d20) Thanks [@matthewp](https://github.com/matthewp)! - Adds a default `AGENTS.md` file to new projects with dev server instructions and documentation links. Also creates a `CLAUDE.md` symlink (with hard link fallback) pointing to `AGENTS.md`.
+
+## 5.1.0-beta.0
+
+### Minor Changes
+
+- [#17122](https://github.com/withastro/astro/pull/17122) [`cbd6123`](https://github.com/withastro/astro/commit/cbd6123f072190df9c6bd49f5baf0e248e521d20) Thanks [@matthewp](https://github.com/matthewp)! - Adds a default `AGENTS.md` file to new projects with dev server instructions and documentation links. Also creates a `CLAUDE.md` symlink (with hard link fallback) pointing to `AGENTS.md`.
+
+## 5.0.6
+
+### Patch Changes
+
+- [#16419](https://github.com/withastro/astro/pull/16419) [`f3485c3`](https://github.com/withastro/astro/commit/f3485c3458bc8bf70c152126e418c24f489ded9d) Thanks [@matthewp](https://github.com/matthewp)! - Hardens nested object and package metadata lookups to ignore prototype keys in content handling and project scaffolding
+
+## 5.0.5
+
+### Patch Changes
+
+- [#16122](https://github.com/withastro/astro/pull/16122) [`9a2113b`](https://github.com/withastro/astro/commit/9a2113bc8a7b9677831a968cec6ccda6b76eea7d) Thanks [@matthewp](https://github.com/matthewp)! - Fixes dependency installation failing on Windows when using Bun as the package manager
+
+## 5.0.4
+
+### Patch Changes
+
+- [#16106](https://github.com/withastro/astro/pull/16106) [`d241012`](https://github.com/withastro/astro/commit/d241012107c7df55ac46192bcb7b1fbe650f3d93) Thanks [@matthewp](https://github.com/matthewp)! - Fixes dependency installation failing on Windows when running `npm create astro@latest`. The previous fix for DEP0190 warnings incorrectly assumed `.cmd` shims could be spawned directly without a shell — on Windows, `.cmd` files require `cmd.exe` to execute. Package manager commands are now invoked via `cmd.exe /d /s /c` on Windows. Also fixes the `[object Object]` error message that appeared when installation failed, replacing it with the actual error.
+
+## 5.0.3
+
+### Patch Changes
+
+- [#15967](https://github.com/withastro/astro/pull/15967) [`8db1f62`](https://github.com/withastro/astro/commit/8db1f629c364ab41413fa99b1d00e71484cb0112) Thanks [@matthewp](https://github.com/matthewp)! - Warn when `--yes` is used with a third-party template to clarify that dependency installation may run lifecycle scripts.
+
+## 5.0.2
+
+### Patch Changes
+
+- [#15864](https://github.com/withastro/astro/pull/15864) [`d3c7de9`](https://github.com/withastro/astro/commit/d3c7de9253e9cb31fa5c4bf9f4bdf59dd1ada7b0) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Removes temporary support for Node >=20.19.1 because Stackblitz now uses Node 22 by default
+
+## 5.0.1
+
+### Patch Changes
+
+- [#15885](https://github.com/withastro/astro/pull/15885) [`817afb6`](https://github.com/withastro/astro/commit/817afb6d2217a9ed590690163e5df8d50c910ab6) Thanks [@matthewp](https://github.com/matthewp)! - Avoid spawning package manager commands with `shell: true` to prevent Node.js DEP0190 warnings during `create-astro` runs on newer Node versions.
+
+## 5.0.0
+
+### Major Changes
+
+- [#14427](https://github.com/withastro/astro/pull/14427) [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases minimum Node.js version to 22.12.0 - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#node-22))
+
+### Patch Changes
+
+- [#15187](https://github.com/withastro/astro/pull/15187) [`bbb5811`](https://github.com/withastro/astro/commit/bbb5811eb801a42dc091bb09ea19d6cde3033795) Thanks [@matthewp](https://github.com/matthewp)! - Update to Astro 6 beta
+
+- [#15344](https://github.com/withastro/astro/pull/15344) [`9d87f77`](https://github.com/withastro/astro/commit/9d87f77e57f5486802ef9e1c11ccece5914c7006) Thanks [@matthewp](https://github.com/matthewp)! - Fixes a hang that could occur when the npm registry is slow or unresponsive by adding a 10 second timeout to the version check
+
+- [#15350](https://github.com/withastro/astro/pull/15350) [`d758b68`](https://github.com/withastro/astro/commit/d758b68ff776c3bef04553dde3996da8e58ffaee) Thanks [@matthewp](https://github.com/matthewp)! - Errors when `--add` and `--no-install` flags are used together, as `--add` requires dependencies to be installed
+
+- [#15264](https://github.com/withastro/astro/pull/15264) [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Lower the Node version requirement to allow running on Stackblitz until it supports v22
+
+- [#15419](https://github.com/withastro/astro/pull/15419) [`a18d727`](https://github.com/withastro/astro/commit/a18d727fc717054df85177c8e0c3d38a5252f2da) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where `--add` could accept any kind of string, leading to different errors. Now `--add` accepts only values of valid integrations and adapters.
+
+- [#15419](https://github.com/withastro/astro/pull/15419) [`a18d727`](https://github.com/withastro/astro/commit/a18d727fc717054df85177c8e0c3d38a5252f2da) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where the `add` command could accept any arbitrary value, leading the possible command injections. Now `add` and `--add` accepts
+  values that are only acceptable npmjs.org names.
+
+## 5.0.0-beta.4
+
+### Patch Changes
+
+- [#15419](https://github.com/withastro/astro/pull/15419) [`a18d727`](https://github.com/withastro/astro/commit/a18d727fc717054df85177c8e0c3d38a5252f2da) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where `--add` could accept any kind of string, leading to different errors. Now `--add` accepts only values of valid integrations and adapters.
+
+- [#15419](https://github.com/withastro/astro/pull/15419) [`a18d727`](https://github.com/withastro/astro/commit/a18d727fc717054df85177c8e0c3d38a5252f2da) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where the `add` command could accept any arbitrary value, leading the possible command injections. Now `add` and `--add` accepts
+  values that are only acceptable npmjs.org names.
+
+## 5.0.0-beta.3
+
+### Patch Changes
+
+- [#15344](https://github.com/withastro/astro/pull/15344) [`9d87f77`](https://github.com/withastro/astro/commit/9d87f77e57f5486802ef9e1c11ccece5914c7006) Thanks [@matthewp](https://github.com/matthewp)! - Fixes a hang that could occur when the npm registry is slow or unresponsive by adding a 10 second timeout to the version check
+
+- [#15350](https://github.com/withastro/astro/pull/15350) [`d758b68`](https://github.com/withastro/astro/commit/d758b68ff776c3bef04553dde3996da8e58ffaee) Thanks [@matthewp](https://github.com/matthewp)! - Errors when `--add` and `--no-install` flags are used together, as `--add` requires dependencies to be installed
+
+## 5.0.0-beta.2
+
+### Patch Changes
+
+- [#15264](https://github.com/withastro/astro/pull/15264) [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Lower the Node version requirement to allow running on Stackblitz until it supports v22
+
+## 5.0.0-beta.1
+
+### Patch Changes
+
+- [#15187](https://github.com/withastro/astro/pull/15187) [`bbb5811`](https://github.com/withastro/astro/commit/bbb5811eb801a42dc091bb09ea19d6cde3033795) Thanks [@matthewp](https://github.com/matthewp)! - Update to Astro 6 beta
+
+## 5.0.0-alpha.0
+
+### Major Changes
+
+- [#14427](https://github.com/withastro/astro/pull/14427) [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases minimum Node.js version to 22.12.0 - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#node-22))
+
+## 4.13.2
+
+### Patch Changes
+
+- [#14528](https://github.com/withastro/astro/pull/14528) [`3597371`](https://github.com/withastro/astro/commit/3597371fe841603d0771b258010e69fbf5d843f7) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Fixes a case where a deprecation warning would be shown on Node 24
+
+## 4.13.1
+
+### Patch Changes
+
+- [#14158](https://github.com/withastro/astro/pull/14158) [`89e9364`](https://github.com/withastro/astro/commit/89e9364ba0121424f03f7eb959416371c26f38e3) Thanks [@bjohansebas](https://github.com/bjohansebas)! - Prevents deprecation warnings in Node 24
+
+## 4.13.0
+
+### Minor Changes
+
+- [#14115](https://github.com/withastro/astro/pull/14115) [`270e009`](https://github.com/withastro/astro/commit/270e009048f226845c0297077c1114d7fb467c6a) Thanks [@ascorbic](https://github.com/ascorbic)! - Removes "Open in x" badges from the README of the official Astro templates when a new project is created
+
+- [#14115](https://github.com/withastro/astro/pull/14115) [`270e009`](https://github.com/withastro/astro/commit/270e009048f226845c0297077c1114d7fb467c6a) Thanks [@ascorbic](https://github.com/ascorbic)! - Adds support for marking sections in template READMEs to be removed when the `create astro` command is used to create a new project
+
+  Theme authors can now use magic comments in template READMEs to mark sections that should not be included when a user runs `create-astro` with the `--template` flag to create a new project.
+
+  This allows templates to have content that is visible when viewed in the source repo but not when the template is copied for use in a new project. This is useful for content that is appropriate for a theme's own repository, but will not be useful to someone using the theme, such as
+  an "Open this repository in StackBlitz" badge where the URL is hardcoded .
+
+  Use the magic comments `<!-- ASTRO:REMOVE:START -->` and `<!-- ASTRO:REMOVE:END -->` to indicate content to be excluded from your README during the `create astro` process.
+
+  ```md
+  <!-- ASTRO:REMOVE:START -->
+
+  [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/withastro/astro/tree/latest/examples/basics)
+
+  <!-- ASTRO:REMOVE:END -->
+  ```
+
+  Note that these comments only remove content when new projects are created using `create astro`. When your theme template is forked, your README will be copied in its entirety.
+
+## 4.12.1
+
+### Patch Changes
+
+- [#12529](https://github.com/withastro/astro/pull/12529) [`485c2f0`](https://github.com/withastro/astro/commit/485c2f0f1617a79ed997970c2cc439dde89e9be2) Thanks [@apatel369](https://github.com/apatel369)! - Fixes an issue where installing Astro beta using `create-astro` displays the wrong Astro version in the installation messages.
+
+## 4.12.0
+
+### Minor Changes
+
+- [#13809](https://github.com/withastro/astro/pull/13809) [`3c3b492`](https://github.com/withastro/astro/commit/3c3b492375bd6a63f1fb6cede3685aff999be3c9) Thanks [@ascorbic](https://github.com/ascorbic)! - Increases minimum Node.js version to 18.20.8
+
+  Node.js 18 has now reached end-of-life and should not be used. For now, Astro will continue to support Node.js 18.20.8, which is the final LTS release of Node.js 18, as well as Node.js 20 and Node.js 22 or later. We will drop support for Node.js 18 in a future release, so we recommend upgrading to Node.js 22 as soon as possible. See Astro's [Node.js support policy](https://docs.astro.build/en/upgrade-astro/#support) for more details.
+
+  :warning: **Important note for users of Cloudflare Pages**: The current build image for Cloudflare Pages uses Node.js 18.17.1 by default, which is no longer supported by Astro. If you are using Cloudflare Pages you should [override the default Node.js version](https://developers.cloudflare.com/pages/configuration/build-image/#override-default-versions) to Node.js 22. This does not affect users of Cloudflare Workers, which uses Node.js 22 by default.
+
+## 4.11.4
+
+### Patch Changes
+
+- [#13703](https://github.com/withastro/astro/pull/13703) [`659904b`](https://github.com/withastro/astro/commit/659904bd999c6abdd62f18230954b7097dcbb7fe) Thanks [@ascorbic](https://github.com/ascorbic)! - Fixes an issue when installing dependencies with `pnpm`.
+
+## 4.11.3
+
+### Patch Changes
+
+- [#13591](https://github.com/withastro/astro/pull/13591) [`5dd2d3f`](https://github.com/withastro/astro/commit/5dd2d3fde8a138ed611dedf39ffa5dfeeed315f8) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Removes unused code
+
+## 4.11.2
+
+### Patch Changes
+
+- [#13636](https://github.com/withastro/astro/pull/13636) [`a9fd03f`](https://github.com/withastro/astro/commit/a9fd03fd82f2ea09c7bec9fd06ef20f5612e0a56) Thanks [@sarah11918](https://github.com/sarah11918)! - Updates the wording for choosing the "minimal" starter template options
+
+## 4.11.1
+
+### Patch Changes
+
+- [#13257](https://github.com/withastro/astro/pull/13257) [`6012e06`](https://github.com/withastro/astro/commit/6012e061cdd07688be73d5d543ad3a055c373475) Thanks [@ADTC](https://github.com/ADTC)! - Modify the template README file to reflect the correct package manager
+
+## 4.11.0
+
+### Minor Changes
+
+- [#12539](https://github.com/withastro/astro/pull/12539) [`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7) Thanks [@bluwy](https://github.com/bluwy)! - Drops node 21 support
+
+- [#12083](https://github.com/withastro/astro/pull/12083) [`9263e96`](https://github.com/withastro/astro/commit/9263e965932b9a6a116801c063c6b7105c39643e) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Reworks the experience of creating a new Astro project using the `create astro` CLI command.
+  - Updates the list of templates to include Starlight and combines the "minimal" and "basics" templates into a new, refreshed "Basics" template to serve as the single, minimal Astro project starter.
+  - Removes the TypeScript question. Astro is TypeScript-only, so this question was often misleading. The "Strict" preset is now the default, but it can still be changed manually in `tsconfig.json`.
+  - `astro check` is no longer automatically added to the build script.
+  - Added a new `--add` flag to install additional integrations after creating a project. For example, `pnpm create astro --add react` will create a new Astro project and install the React integration.
+
+## 4.11.0-beta.1
+
+### Minor Changes
+
+- [#12539](https://github.com/withastro/astro/pull/12539) [`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7) Thanks [@bluwy](https://github.com/bluwy)! - Drops node 21 support
+
+## 4.11.0-beta.0
+
+### Minor Changes
+
+- [#12083](https://github.com/withastro/astro/pull/12083) [`9263e96`](https://github.com/withastro/astro/commit/9263e965932b9a6a116801c063c6b7105c39643e) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Reworks the experience of creating a new Astro project using the `create astro` CLI command.
+  - Updates the list of templates to include Starlight and combines the "minimal" and "basics" templates into a new, refreshed "Basics" template to serve as the single, minimal Astro project starter.
+  - Removes the TypeScript question. Astro is TypeScript-only, so this question was often misleading. The "Strict" preset is now the default, but it can still be changed manually in `tsconfig.json`.
+  - `astro check` is no longer automatically added to the build script.
+  - Added a new `--add` flag to install additional integrations after creating a project. For example, `pnpm create astro --add react` will create a new Astro project and install the React integration.
+
 ## 4.10.0
 
 ### Minor Changes
@@ -24,7 +287,7 @@
 
 ### Minor Changes
 
-- [#11924](https://github.com/withastro/astro/pull/11924) [`7d70ba3`](https://github.com/withastro/astro/commit/7d70ba317889b9281c7891038779a68fcb8f0778) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates the default Astro config with `// @ts-check` if the Typescript preset is `strict` or `strictest`
+- [#11924](https://github.com/withastro/astro/pull/11924) [`7d70ba3`](https://github.com/withastro/astro/commit/7d70ba317889b9281c7891038779a68fcb8f0778) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates the default Astro config with `// @ts-check` if the TypeScript preset is `strict` or `strictest`
 
 ## 4.8.4
 
@@ -68,7 +331,7 @@
 
 ### Patch Changes
 
-- [#10255](https://github.com/withastro/astro/pull/10255) [`2aec2cdc21f48f9b4f1dd82e2fd16fa3d653ccc5`](https://github.com/withastro/astro/commit/2aec2cdc21f48f9b4f1dd82e2fd16fa3d653ccc5) Thanks [@natemoo-re](https://github.com/natemoo-re)! - Fixes an issue where TypeScript and `@astrojs/check` versions would occassionally print as `undefined`.
+- [#10255](https://github.com/withastro/astro/pull/10255) [`2aec2cdc21f48f9b4f1dd82e2fd16fa3d653ccc5`](https://github.com/withastro/astro/commit/2aec2cdc21f48f9b4f1dd82e2fd16fa3d653ccc5) Thanks [@natemoo-re](https://github.com/natemoo-re)! - Fixes an issue where TypeScript and `@astrojs/check` versions would occasionally print as `undefined`.
 
 ## 4.7.3
 
@@ -258,7 +521,7 @@
 
 ### Patch Changes
 
-- [#7527](https://github.com/withastro/astro/pull/7527) [`9e2426f75`](https://github.com/withastro/astro/commit/9e2426f75637a6318961f483de90b635f3fdadeb) Thanks [@natemoo-re](https://github.com/natemoo-re)! - Default registry logic to fallback to NPM if registry command fails (sorry, Bun users!)
+- [#7527](https://github.com/withastro/astro/pull/7527) [`9e2426f75`](https://github.com/withastro/astro/commit/9e2426f75637a6318961f483de90b635f3fdadeb) Thanks [@natemoo-re](https://github.com/natemoo-re)! - Default registry logic to fall back to NPM if registry command fails (sorry, Bun users!)
 
 - [#7539](https://github.com/withastro/astro/pull/7539) [`1170877b5`](https://github.com/withastro/astro/commit/1170877b51aaa13203e8c488dcf4e39d1b5553ee) Thanks [@jc1144096387](https://github.com/jc1144096387)! - Update registry logic, improving edge cases (http support, redirects, registries ending with '/')
 
@@ -358,7 +621,7 @@
 
 ### Patch Changes
 
-- [#5953](https://github.com/withastro/astro/pull/5953) [`5c64324c0`](https://github.com/withastro/astro/commit/5c64324c0a1b06e836c3d53668940faca4cb517d) Thanks [@ZermattChris](https://github.com/ZermattChris)! - Check for a pre-existing .git directory and if found, skip trying to create a new one.
+- [#5953](https://github.com/withastro/astro/pull/5953) [`5c64324c0`](https://github.com/withastro/astro/commit/5c64324c0a1b06e836c3d53668940faca4cb517d) Thanks [@ZermattChris](https://github.com/ZermattChris)! - Check for a preexisting .git directory and if found, skip trying to create a new one.
 
 ## 2.0.1
 
@@ -451,7 +714,6 @@
 ### Minor Changes
 
 - [#4810](https://github.com/withastro/astro/pull/4810) [`7481ffda0`](https://github.com/withastro/astro/commit/7481ffda028d9028d8e28bc7c6e9960ab80acf0f) Thanks [@mrienstra](https://github.com/mrienstra)! - Always write chosen config to `tsconfig.json`.
-
   - Before: Only when `strict` & `strictest` was selected
   - After: Also when `base` is selected (via "Relaxed" or "I prefer not to use TypeScript")
 

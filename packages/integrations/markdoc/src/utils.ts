@@ -19,7 +19,7 @@ export class MarkdocError extends Error {
 
 		this.title = title;
 		if (message) this.message = message;
-		// Only set this if we actually have a stack passed, otherwise uses Error's
+		// Only set this if we actually have a stack passed; otherwise, uses Error's
 		this.stack = stack ? stack : this.stack;
 		this.loc = location;
 		this.hint = hint;
@@ -58,20 +58,6 @@ export function isValidUrl(str: string): boolean {
 	} catch {
 		return false;
 	}
-}
-
-/**
- * Identifies Astro components with propagated assets
- * @see 'packages/astro/src/content/consts.ts'
- */
-export const PROPAGATED_ASSET_FLAG = 'astroPropagatedAssets';
-
-/**
- * @see 'packages/astro/src/content/utils.ts'
- */
-export function hasContentFlag(viteId: string, flag: string): boolean {
-	const flags = new URLSearchParams(viteId.split('?')[1] ?? '');
-	return flags.has(flag);
 }
 
 /** Identifier for components imports passed as `tags` or `nodes` configuration. */

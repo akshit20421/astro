@@ -1,14 +1,17 @@
-import type { SSRResult } from '../../@types/astro.js';
 import { AstroJSX, type AstroVNode, isVNode } from '../../jsx-runtime/index.js';
+import type { SSRResult } from '../../types/public/internal.js';
+import { escapeStyleText } from './escape.js';
 import {
-	HTMLString,
 	escapeHTML,
+	HTMLString,
 	markHTMLString,
-	renderToString,
 	spreadAttributes,
 	voidElementNames,
 } from './index.js';
+import { isAstroComponentFactory } from './render/astro/factory.js';
 import { renderComponentToString } from './render/component.js';
+import type { RenderInstruction } from './render/instruction.js';
+import { mergeSlotInstructions, SlotString } from './render/slot.js';
 
 const ClientOnlyPlaceholder = 'astro-client-only';
 
@@ -35,10 +38,24 @@ export async function renderJSX(result: SSRResult, vnode: any): Promise<any> {
 			return vnode;
 		case !vnode && vnode !== 0:
 			return '';
-		case Array.isArray(vnode):
-			return markHTMLString(
-				(await Promise.all(vnode.map((v: any) => renderJSX(result, v)))).join(''),
-			);
+		case Array.isArray(vnode): {
+			const renderedItems = await Promise.all(vnode.map((v: any) => renderJSX(result, v)));
+			// Collect instructions from SlotString items to preserve hydration scripts
+			let instructions: RenderInstruction[] | null = null;
+			let content = '';
+			for (const item of renderedItems) {
+				if (item instanceof SlotString) {
+					content += item;
+					instructions = mergeSlotInstructions(instructions, item);
+				} else {
+					content += item;
+				}
+			}
+			if (instructions) {
+				return markHTMLString(new SlotString(content, instructions));
+			}
+			return markHTMLString(content);
+		}
 	}
 
 	return renderJSXVNode(result, vnode);
@@ -54,7 +71,7 @@ Did you forget to import the component or is it possible there is a typo?`);
 			}
 			case (vnode.type as any) === Symbol.for('astro:fragment'):
 				return renderJSX(result, vnode.props.children);
-			case (vnode.type as any).isAstroComponentFactory: {
+			case isAstroComponentFactory(vnode.type): {
 				let props: Record<string, any> = {};
 				let slots: Record<string, any> = {};
 				for (const [key, value] of Object.entries(vnode.props ?? {})) {
@@ -64,16 +81,22 @@ Did you forget to import the component or is it possible there is a typo?`);
 						props[key] = value;
 					}
 				}
-				const str = await renderToString(result, vnode.type as any, props, slots);
-				if (str instanceof Response) {
-					throw str;
-				}
+				// We don't use renderToString because it doesn't contain the server island script handling
+				const str = await renderComponentToString(
+					result,
+					vnode.type.name,
+					vnode.type,
+					props,
+					slots,
+				);
 				const html = markHTMLString(str);
 				return html;
 			}
 			case !vnode.type && (vnode.type as any) !== 0:
 				return '';
-			case typeof vnode.type === 'string' && vnode.type !== ClientOnlyPlaceholder:
+			case typeof vnode.type === 'string' &&
+				vnode.type !== ClientOnlyPlaceholder &&
+				!(vnode.type as string).includes('-'):
 				return markHTMLString(await renderElement(result, vnode.type as string, vnode.props ?? {}));
 		}
 
@@ -101,6 +124,11 @@ Did you forget to import the component or is it possible there is a typo?`);
 			const _slots: Record<string, any> = {
 				default: [],
 			};
+			// For custom HTML elements (string type with hyphen), the `slot` attribute on children
+			// is a standard HTML attribute for web component Shadow DOM slot distribution, not an
+			// Astro slot assignment. Skip slot extraction to preserve it in the output.
+			const isCustomElement =
+				typeof vnode.type === 'string' && (vnode.type as string).includes('-');
 			function extractSlots(child: any): any {
 				if (Array.isArray(child)) {
 					return child.map((c) => extractSlots(c));
@@ -109,7 +137,7 @@ Did you forget to import the component or is it possible there is a typo?`);
 					_slots.default.push(child);
 					return;
 				}
-				if ('slot' in child.props) {
+				if ('slot' in child.props && !isCustomElement) {
 					_slots[child.props.slot] = [...(_slots[child.props.slot] ?? []), child];
 					delete child.props.slot;
 					return;
@@ -167,7 +195,7 @@ async function renderElement(
 ) {
 	return markHTMLString(
 		`<${tag}${spreadAttributes(props)}${markHTMLString(
-			(children == null || children == '') && voidElementNames.test(tag)
+			(children == null || children === '') && voidElementNames.test(tag)
 				? `/>`
 				: `>${
 						children == null ? '' : await renderJSX(result, prerenderElementChildren(tag, children))
@@ -180,12 +208,13 @@ async function renderElement(
  * Pre-render the children with the given `tag` information
  */
 function prerenderElementChildren(tag: string, children: any) {
-	// For content within <style> and <script> tags that are plain strings, e.g. injected
-	// by remark/rehype plugins, or if a user explicitly does `<script>{'...'}</script>`,
-	// we mark it as an HTML string to prevent the content from being HTML-escaped.
-	if (typeof children === 'string' && (tag === 'style' || tag === 'script')) {
-		return markHTMLString(children);
-	} else {
-		return children;
+	// Literal `<style>`/`<script>` content (including content injected by remark/rehype
+	// plugins) is collapsed into `set:html` at compile time, so any remaining plain-string
+	// children here are dynamic values that should be escaped like other element content.
+	// `escapeStyleText` only escapes `<`, preserving quotes CSS commonly relies on while
+	// still preventing the value from closing the `<style>` tag early.
+	if (typeof children === 'string' && tag === 'style') {
+		return markHTMLString(escapeStyleText(children));
 	}
+	return children;
 }

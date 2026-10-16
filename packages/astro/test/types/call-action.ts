@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import { expectTypeOf } from 'expect-type';
-import type { APIContext } from '../../dist/@types/astro.js';
-import { type ActionReturnType, defineAction } from '../../dist/actions/runtime/virtual/server.js';
-import { z } from '../../zod.mjs';
+import { defineAction } from '../../dist/actions/runtime/server.js';
+import type { ActionReturnType } from '../../dist/actions/runtime/types.js';
+import type { APIContext } from '../../dist/types/public/context.js';
+import { z } from '../../dist/zod.js';
 
 describe('Astro.callAction', () => {
 	it('Infers JSON action result on callAction', async () => {
@@ -15,8 +16,9 @@ describe('Astro.callAction', () => {
 				return { name };
 			},
 		});
-		const result = await context.callAction(action, { name: 'Ben' });
-		expectTypeOf<typeof result>().toEqualTypeOf<ActionReturnType<typeof action>>();
+		expectTypeOf(await context.callAction(action, { name: 'Ben' })).toEqualTypeOf<
+			ActionReturnType<typeof action>
+		>();
 	});
 
 	it('Infers form action result on callAction', async () => {
@@ -30,8 +32,9 @@ describe('Astro.callAction', () => {
 				return { name };
 			},
 		});
-		const result = await context.callAction(action, new FormData());
-		expectTypeOf<typeof result>().toEqualTypeOf<ActionReturnType<typeof action>>();
+		expectTypeOf(await context.callAction(action, new FormData())).toEqualTypeOf<
+			ActionReturnType<typeof action>
+		>();
 	});
 
 	it('Infers orThrow action result on callAction', async () => {
@@ -45,7 +48,8 @@ describe('Astro.callAction', () => {
 				return { name };
 			},
 		});
-		const result = await context.callAction(action.orThrow, new FormData());
-		expectTypeOf<typeof result>().toEqualTypeOf<ActionReturnType<(typeof action)['orThrow']>>();
+		expectTypeOf(await context.callAction(action.orThrow, new FormData())).toEqualTypeOf<
+			ActionReturnType<(typeof action)['orThrow']>
+		>();
 	});
 });

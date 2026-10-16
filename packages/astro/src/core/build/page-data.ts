@@ -1,18 +1,18 @@
-import type { AstroSettings, ManifestData } from '../../@types/astro.js';
-import type { Logger } from '../logger/core.js';
+import colors from 'piccolore';
+import type { AstroSettings, RoutesList } from '../../types/astro.js';
+import type { AstroLogger } from '../logger/core.js';
+import { debug } from '../logger/core.js';
+import { DEFAULT_COMPONENTS } from '../routing/default.js';
+import { makePageDataKey } from './plugins/util.js';
 import type { AllPagesData } from './types.js';
 
-import * as colors from 'kleur/colors';
-import { debug } from '../logger/core.js';
-import { makePageDataKey } from './plugins/util.js';
-
-export interface CollectPagesDataOptions {
+interface CollectPagesDataOptions {
 	settings: AstroSettings;
-	logger: Logger;
-	manifest: ManifestData;
+	logger: AstroLogger;
+	manifest: RoutesList;
 }
 
-export interface CollectPagesDataResult {
+interface CollectPagesDataResult {
 	assets: Record<string, string>;
 	allPages: AllPagesData;
 }
@@ -29,6 +29,12 @@ export function collectPagesData(opts: CollectPagesDataOptions): CollectPagesDat
 	// and is then cached across all future SSR builds. In the past, we've had trouble
 	// with parallelized builds without guaranteeing that this is called first.
 	for (const route of manifest.routes) {
+		// There's special handling in SSR for default components like 404
+		// However, we need to include 500 pages so they can be properly built with their styles
+		if (DEFAULT_COMPONENTS.some((component) => route.component === component)) {
+			continue;
+		}
+
 		// Generate a unique key to identify each page in the build process.
 		const key = makePageDataKey(route.route, route.component);
 		// static route:
@@ -39,10 +45,9 @@ export function collectPagesData(opts: CollectPagesDataOptions): CollectPagesDat
 				route,
 				moduleSpecifier: '',
 				styles: [],
-				hoistedScript: undefined,
 			};
 
-			if (settings.config.output === 'static') {
+			if (settings.buildOutput === 'static') {
 				const html = `${route.pathname}`.replace(/\/?$/, '/index.html');
 				debug(
 					'build',
@@ -60,7 +65,6 @@ export function collectPagesData(opts: CollectPagesDataOptions): CollectPagesDat
 			route,
 			moduleSpecifier: '',
 			styles: [],
-			hoistedScript: undefined,
 		};
 	}
 

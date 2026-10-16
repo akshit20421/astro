@@ -1,13 +1,13 @@
-import cssesc from 'cssesc';
+import cssesc from '../../transitions/cssesc.js';
+import { fade, slide } from '../../transitions/index.js';
+import type { SSRResult } from '../../types/public/internal.js';
 import type {
-	SSRResult,
 	TransitionAnimation,
 	TransitionAnimationPair,
 	TransitionAnimationValue,
 	TransitionDirectionalAnimations,
-} from '../../@types/astro.js';
-import { fade, slide } from '../../transitions/index.js';
-import { markHTMLString } from './escape.js';
+} from '../../types/public/view-transitions.js';
+import { escapeStyleText, markHTMLString } from './escape.js';
 
 const transitionNameMap = new WeakMap<SSRResult, number>();
 function incrementTransitionNumber(result: SSRResult) {
@@ -57,7 +57,7 @@ const reEncodeInValidStart: string[] = '-0123456789_'
 	.split('')
 	.reduce((v, c) => ((v[c.charCodeAt(0)] = c), v), [] as string[]);
 
-function reEncode(s: string) {
+export function reEncode(s: string) {
 	let result = '';
 	let codepoint;
 	// we work on codepoints that might use more than 16bit, not character codes.
@@ -69,7 +69,7 @@ function reEncode(s: string) {
 
 			// If we find a character in the range \x00 - \x7f that is not one of the reEncodeValidChars,
 			// we replace it with its hex value escaped by an underscore for decodability (and better readability,
-			// because most of them are punctuations like ,'"":;_..., and '_' might be a better choice than '-')
+			// because most of them are punctuation like ,'"":;_..., and '_' might be a better choice than '-')
 			// The underscore itself (code 95) is also escaped and encoded as two underscores to avoid
 			// collisions between original and encoded strings.
 			// All other values are just copied over
@@ -110,31 +110,21 @@ export function renderTransition(
 		sheet.addModern('group', 'animation: none');
 	}
 
-	result._metadata.extraHead.push(markHTMLString(`<style>${sheet.toString()}</style>`));
+	const css = escapeStyleText(sheet.toString());
+	result._metadata.extraHead.push(markHTMLString(`<style>${css}</style>`));
 	return scope;
 }
 
-export function createAnimationScope(
-	transitionName: string,
-	animations: Record<string, TransitionAnimationPair>,
-) {
-	const hash = Math.random().toString(36).slice(2, 8);
-	const scope = `astro-${hash}`;
-	const sheet = new ViewTransitionStyleSheet(scope, transitionName);
-
-	addPairs(animations, sheet);
-
-	return { scope, styles: sheet.toString().replaceAll('"', '') };
-}
-
-class ViewTransitionStyleSheet {
+export class ViewTransitionStyleSheet {
 	private modern: string[] = [];
 	private fallback: string[] = [];
+	private scope: string;
+	private name: string;
 
-	constructor(
-		private scope: string,
-		private name: string,
-	) {}
+	constructor(scope: string, name: string) {
+		this.scope = scope;
+		this.name = name;
+	}
 
 	toString() {
 		const { scope, name } = this;
@@ -186,7 +176,9 @@ class ViewTransitionStyleSheet {
 				? `[data-astro-transition=back]`
 				: direction === 'forwards'
 					? ''
-					: `[data-astro-transition=${direction}]`;
+					: // Quote custom direction names so values that are not valid CSS identifiers
+						// (e.g. names starting with a digit or containing spaces) still match.
+						`[data-astro-transition=${cssesc(direction, { quotes: 'double', wrap: true })}]`;
 		this.addRule('modern', `${prefix}::view-transition-${image}(${name}) { ${animation} }`);
 		this.addRule(
 			'fallback',
@@ -201,12 +193,22 @@ type AnimationBuilder = {
 	[key: string]: string[] | ((k: string) => string);
 };
 
+// Keep animation values within their declaration while preserving valid CSS functions and strings.
+const CSS_VALUE_DELIMITERS = /[;{}]/g;
+
+function escapeCSSValue(value: string | number) {
+	return value.toString().replace(CSS_VALUE_DELIMITERS, (character) => {
+		return `\\${character.charCodeAt(0).toString(16).toUpperCase()} `;
+	});
+}
+
 function addAnimationProperty(builder: AnimationBuilder, prop: string, value: string | number) {
+	const escapedValue = escapeCSSValue(value);
 	let arr = builder[prop];
 	if (Array.isArray(arr)) {
-		arr.push(value.toString());
+		arr.push(escapedValue);
 	} else {
-		builder[prop] = [value.toString()];
+		builder[prop] = [escapedValue];
 	}
 }
 
@@ -225,7 +227,7 @@ function animationBuilder(): AnimationBuilder {
 	};
 }
 
-function stringifyAnimation(anim: TransitionAnimation | TransitionAnimation[]): string {
+export function stringifyAnimation(anim: TransitionAnimation | TransitionAnimation[]): string {
 	if (Array.isArray(anim)) {
 		return stringifyAnimations(anim);
 	} else {
@@ -233,7 +235,7 @@ function stringifyAnimation(anim: TransitionAnimation | TransitionAnimation[]): 
 	}
 }
 
-function stringifyAnimations(anims: TransitionAnimation[]): string {
+export function stringifyAnimations(anims: TransitionAnimation[]): string {
 	const builder = animationBuilder();
 
 	for (const anim of anims) {
@@ -258,6 +260,6 @@ function stringifyAnimations(anims: TransitionAnimation[]): string {
 	return builder.toString();
 }
 
-function toTimeValue(num: number | string) {
+export function toTimeValue(num: number | string) {
 	return typeof num === 'number' ? num + 'ms' : num;
 }

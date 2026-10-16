@@ -1,4 +1,4 @@
-import { printHelp } from '../../core/messages.js';
+import { printHelp } from '../../core/messages/runtime.js';
 import _sync from '../../core/sync/index.js';
 import { type Flags, flagsToAstroInlineConfig } from '../flags.js';
 
@@ -22,10 +22,5 @@ export async function sync({ flags }: SyncOptions) {
 		return 0;
 	}
 
-	try {
-		await _sync(flagsToAstroInlineConfig(flags), { telemetry: true });
-		return 0;
-	} catch (_) {
-		return 1;
-	}
+	await _sync(flagsToAstroInlineConfig(flags), { telemetry: true });
 }

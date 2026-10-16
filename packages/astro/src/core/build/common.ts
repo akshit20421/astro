@@ -1,25 +1,34 @@
 import npath from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { AstroConfig, RouteData } from '../../@types/astro.js';
-import { appendForwardSlash } from '../../core/path.js';
+import {
+	appendForwardSlash,
+	collapseDuplicateTrailingSlashes,
+	hasFileExtension,
+	joinPaths,
+	removeLeadingForwardSlash,
+	removeTrailingForwardSlash,
+} from '../../core/path.js';
+import type { AstroConfig } from '../../types/public/config.js';
+import type { RouteData, RouteType } from '../../types/public/internal.js';
+import { STATUS_CODE_PAGES } from '../constants.js';
 
-const STATUS_CODE_PAGES = new Set(['/404', '/500']);
 const FALLBACK_OUT_DIR_NAME = './.astro/';
 
-function getOutRoot(astroConfig: AstroConfig): URL {
-	if (astroConfig.output === 'static') {
-		return new URL('./', astroConfig.outDir);
-	} else {
-		return new URL('./', astroConfig.build.client);
-	}
+export function pathToDirectoryURL(path: string): URL {
+	return new URL(appendForwardSlash(pathToFileURL(path).href));
 }
 
-export function getOutFolder(
-	astroConfig: AstroConfig,
-	pathname: string,
-	routeData: RouteData,
-): URL {
-	const outRoot = getOutRoot(astroConfig);
+export function getOutFolder({
+	outRoot,
+	buildFormat,
+	pathname,
+	routeData,
+}: {
+	outRoot: URL;
+	buildFormat: NonNullable<AstroConfig['build']>['format'];
+	pathname: string;
+	routeData: RouteData;
+}): URL {
 	const routeType = routeData.type;
 
 	// This is the root folder to write to.
@@ -29,7 +38,7 @@ export function getOutFolder(
 		case 'fallback':
 		case 'page':
 		case 'redirect':
-			switch (astroConfig.build.format) {
+			switch (buildFormat) {
 				case 'directory': {
 					if (STATUS_CODE_PAGES.has(pathname)) {
 						return new URL('.' + appendForwardSlash(npath.dirname(pathname)), outRoot);
@@ -56,7 +65,7 @@ export function getOutFolder(
 }
 
 export function getOutFile(
-	astroConfig: AstroConfig,
+	buildFormat: NonNullable<AstroConfig['build']>['format'],
 	outFolder: URL,
 	pathname: string,
 	routeData: RouteData,
@@ -68,7 +77,7 @@ export function getOutFile(
 		case 'page':
 		case 'fallback':
 		case 'redirect':
-			switch (astroConfig.build.format) {
+			switch (buildFormat) {
 				case 'directory': {
 					if (STATUS_CODE_PAGES.has(pathname)) {
 						const baseName = npath.basename(pathname);
@@ -94,7 +103,7 @@ export function getOutFile(
 }
 
 /**
- * Ensures the `outDir` is within `process.cwd()`. If not it will fallback to `<cwd>/.astro`.
+ * Ensures the `outDir` is within `process.cwd()`. If not it will fall back to `<cwd>/.astro`.
  * This is used for static `ssrBuild` so the output can access node_modules when we import
  * the output files. A hardcoded fallback dir is fine as it would be cleaned up after build.
  */
@@ -104,4 +113,58 @@ export function getOutDirWithinCwd(outDir: URL): URL {
 	} else {
 		return new URL(FALLBACK_OUT_DIR_NAME, pathToFileURL(process.cwd() + npath.sep));
 	}
+}
+
+export function getUrlForPath(
+	pathname: string,
+	base: string,
+	origin: string,
+	format: AstroConfig['build']['format'],
+	trailingSlash: AstroConfig['trailingSlash'],
+	routeType: RouteType,
+	isIndex: boolean,
+): URL {
+	/**
+	 * Examples:
+	 * pathname: /, /foo
+	 * base: /
+	 */
+
+	let ending: string;
+	// For `preserve`, non-index routes output as flat `.html` files (like `file`),
+	// while index routes output as `dir/index.html` (like `directory`).
+	const effectiveFormat = format === 'preserve' ? (isIndex ? 'directory' : 'file') : format;
+	switch (effectiveFormat) {
+		case 'directory': {
+			ending = trailingSlash === 'never' ? '' : '/';
+			break;
+		}
+		case 'file':
+		default: {
+			ending = '.html';
+			break;
+		}
+	}
+	let buildPathname: string;
+	if (pathname === '/' || pathname === '') {
+		if (effectiveFormat === 'file') {
+			buildPathname = joinPaths(base, 'index.html');
+		} else {
+			buildPathname = collapseDuplicateTrailingSlashes(base + ending, trailingSlash !== 'never');
+		}
+	} else if (routeType === 'endpoint') {
+		const buildPathRelative = removeLeadingForwardSlash(pathname);
+		let endpointPathname = joinPaths(base, buildPathRelative);
+		if (trailingSlash === 'always' && !hasFileExtension(pathname)) {
+			endpointPathname = appendForwardSlash(endpointPathname);
+		} else if (trailingSlash === 'never') {
+			endpointPathname = removeTrailingForwardSlash(endpointPathname);
+		}
+		buildPathname = endpointPathname;
+	} else {
+		const buildPathRelative =
+			removeTrailingForwardSlash(removeLeadingForwardSlash(pathname)) + ending;
+		buildPathname = joinPaths(base, buildPathRelative);
+	}
+	return new URL(buildPathname, origin);
 }

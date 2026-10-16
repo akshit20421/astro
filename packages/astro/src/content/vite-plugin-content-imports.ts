@@ -2,21 +2,21 @@ import type fsMod from 'node:fs';
 import { extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import * as devalue from 'devalue';
-import type { PluginContext } from 'rollup';
-import type { Plugin } from 'vite';
+import type { Plugin, Rolldown, RunnableDevEnvironment } from 'vite';
+import { getImageAssetCode, IMAGE_ASSET_IMPORT } from '../assets/utils/image-asset-code.js';
+import { createContentDataIncrementalMetadata } from '../core/build/incremental-metadata.js';
+import { ASTRO_VITE_ENVIRONMENT_NAMES } from '../core/constants.js';
+import { AstroError } from '../core/errors/errors.js';
+import { AstroErrorData } from '../core/errors/index.js';
+import type { AstroLogger } from '../core/logger/core.js';
+import type { AstroSettings } from '../types/astro.js';
+import type { AstroConfig } from '../types/public/config.js';
 import type {
-	AstroConfig,
-	AstroSettings,
 	ContentEntryModule,
 	ContentEntryType,
 	DataEntryModule,
 	DataEntryType,
-} from '../@types/astro.js';
-import { getProxyCode } from '../assets/utils/proxy.js';
-import { AstroError } from '../core/errors/errors.js';
-import { AstroErrorData } from '../core/errors/index.js';
-import type { Logger } from '../core/logger/core.js';
-import { isServerLikeOutput } from '../core/util.js';
+} from '../types/public/content.js';
 import { CONTENT_FLAG, DATA_FLAG } from './consts.js';
 import {
 	type ContentConfig,
@@ -70,9 +70,13 @@ export function astroContentImportPlugin({
 }: {
 	fs: typeof fsMod;
 	settings: AstroSettings;
-	logger: Logger;
+	logger: AstroLogger;
 }): Plugin[] {
-	const contentPaths = getContentPaths(settings.config, fs);
+	const contentPaths = getContentPaths(
+		settings.config,
+		fs,
+		settings.config.legacy?.collectionsBackwardsCompat,
+	);
 	const contentEntryExts = getContentEntryExts(settings);
 	const dataEntryExts = getDataEntryExts(settings);
 
@@ -91,68 +95,86 @@ export function astroContentImportPlugin({
 				// Get symlinks once at build start
 				symlinks = await getSymlinkedContentCollections({ contentDir, logger, fs });
 			},
-			async transform(_, viteId) {
-				if (hasContentFlag(viteId, DATA_FLAG)) {
-					// By default, Vite will resolve symlinks to their targets. We need to reverse this for
-					// content entries, so we can get the path relative to the content directory.
-					const fileId = reverseSymlink({
-						entry: viteId.split('?')[0] ?? viteId,
-						contentDir,
-						symlinks,
-					});
-					// Data collections don't need to rely on the module cache.
-					// This cache only exists for the `render()` function specific to content.
-					const { id, data, collection, _internal } = await getDataEntryModule({
-						fileId,
-						entryConfigByExt: dataEntryConfigByExt,
-						contentDir,
-						config: settings.config,
-						fs,
-						pluginContext: this,
-						shouldEmitFile,
-					});
+			transform: {
+				filter: {
+					id: new RegExp(`(?:\\?|&)(?:${DATA_FLAG}|${CONTENT_FLAG})(?:&|=|$)`),
+				},
+				async handler(_, viteId) {
+					if (hasContentFlag(viteId, DATA_FLAG)) {
+						// By default, Vite will resolve symlinks to their targets. We need to reverse this for
+						// content entries, so we can get the path relative to the content directory.
+						const fileId = reverseSymlink({
+							entry: viteId.split('?')[0] ?? viteId,
+							contentDir,
+							symlinks,
+						});
+						// Data collections don't need to rely on the module cache.
+						// This cache only exists for the `render()` function specific to content.
+						const { id, data, collection, _internal } = await getDataEntryModule({
+							fileId,
+							entryConfigByExt: dataEntryConfigByExt,
+							contentDir,
+							config: settings.config,
+							fs,
+							pluginContext: this,
+							shouldEmitFile,
+						});
 
-					const code = `
+						const entryData = stringifyEntryData(data, settings.buildOutput === 'server');
+						const code = `${entryData.imports}
 export const id = ${JSON.stringify(id)};
 export const collection = ${JSON.stringify(collection)};
-export const data = ${stringifyEntryData(data, isServerLikeOutput(settings.config))};
+export const data = ${entryData.code};
 export const _internal = {
 	type: 'data',
 	filePath: ${JSON.stringify(_internal.filePath)},
 	rawData: ${JSON.stringify(_internal.rawData)},
 };
 `;
-					return code;
-				} else if (hasContentFlag(viteId, CONTENT_FLAG)) {
-					const fileId = reverseSymlink({ entry: viteId.split('?')[0], contentDir, symlinks });
-					const { id, slug, collection, body, data, _internal } = await getContentEntryModule({
-						fileId,
-						entryConfigByExt: contentEntryConfigByExt,
-						contentDir,
-						config: settings.config,
-						fs,
-						pluginContext: this,
-						shouldEmitFile,
-					});
+						return {
+							code,
+							map: { mappings: '' },
+							meta: createContentDataIncrementalMetadata(),
+						};
+					} else if (hasContentFlag(viteId, CONTENT_FLAG)) {
+						const fileId = reverseSymlink({ entry: viteId.split('?')[0], contentDir, symlinks });
+						const { id, slug, collection, body, data, _internal } = await getContentEntryModule({
+							fileId,
+							entryConfigByExt: contentEntryConfigByExt,
+							contentDir,
+							config: settings.config,
+							fs,
+							pluginContext: this,
+							shouldEmitFile,
+						});
 
-					const code = `
+						const entryData = stringifyEntryData(data, settings.buildOutput === 'server');
+						const code = `${entryData.imports}
 						export const id = ${JSON.stringify(id)};
 						export const collection = ${JSON.stringify(collection)};
 						export const slug = ${JSON.stringify(slug)};
 						export const body = ${JSON.stringify(body)};
-						export const data = ${stringifyEntryData(data, isServerLikeOutput(settings.config))};
+						export const data = ${entryData.code};
 						export const _internal = {
 							type: 'content',
 							filePath: ${JSON.stringify(_internal.filePath)},
 							rawData: ${JSON.stringify(_internal.rawData)},
 						};`;
 
-					return { code, map: { mappings: '' } };
-				}
+						return {
+							code,
+							map: { mappings: '' },
+							meta: createContentDataIncrementalMetadata(),
+						};
+					}
+				},
 			},
 			configureServer(viteServer) {
 				viteServer.watcher.on('all', async (event, entry) => {
 					if (CHOKIDAR_MODIFIED_EVENTS.includes(event)) {
+						const environment = viteServer.environments[ASTRO_VITE_ENVIRONMENT_NAMES.ssr];
+						const timestamp = Date.now();
+
 						const entryType = getEntryType(entry, contentPaths, contentEntryExts, dataEntryExts);
 						if (!COLLECTION_TYPES_TO_INVALIDATE_ON.includes(entryType)) return;
 
@@ -160,21 +182,29 @@ export const _internal = {
 						// Reload the config in case of changes.
 						// Changes to the config file itself are handled in types-generator.ts, so we skip them here
 						if (entryType === 'content' || entryType === 'data') {
-							await reloadContentConfigObserver({ fs, settings, viteServer });
+							await reloadContentConfigObserver({
+								fs,
+								settings,
+								environment: viteServer.environments[
+									ASTRO_VITE_ENVIRONMENT_NAMES.astro
+								] as RunnableDevEnvironment,
+								logger,
+							});
 						}
 
 						// Invalidate all content imports and `render()` modules.
 						// TODO: trace `reference()` calls for fine-grained invalidation.
-						for (const modUrl of viteServer.moduleGraph.urlToModuleMap.keys()) {
+						for (const modUrl of environment.moduleGraph.urlToModuleMap.keys()) {
 							if (
 								hasContentFlag(modUrl, CONTENT_FLAG) ||
 								hasContentFlag(modUrl, DATA_FLAG) ||
 								Boolean(getContentRendererByViteId(modUrl, settings))
 							) {
 								try {
-									const mod = await viteServer.moduleGraph.getModuleByUrl(modUrl);
+									const mod = await environment.moduleGraph.getModuleByUrl(modUrl);
 									if (mod) {
-										viteServer.moduleGraph.invalidateModule(mod);
+										// Pass `true` to mark this as HMR invalidation so Vite drops cached SSR results.
+										environment.moduleGraph.invalidateModule(mod, undefined, timestamp, true);
 									}
 								} catch (e: any) {
 									// The server may be closed due to a restart caused by this file change
@@ -192,12 +222,21 @@ export const _internal = {
 	if (settings.contentEntryTypes.some((t) => t.getRenderModule)) {
 		plugins.push({
 			name: 'astro:content-render-imports',
-			async transform(contents, viteId) {
-				const contentRenderer = getContentRendererByViteId(viteId, settings);
-				if (!contentRenderer) return;
+			transform: {
+				filter: {
+					id: {
+						include: settings.contentEntryTypes
+							.filter((t) => t.getRenderModule)
+							.map((t) => new RegExp(`\\.(${t.extensions.map((e) => e.slice(1)).join('|')})$`)),
+					},
+				},
+				async handler(contents, viteId) {
+					const contentRenderer = getContentRendererByViteId(viteId, settings);
+					if (!contentRenderer) return;
 
-				const fileId = viteId.split('?')[0];
-				return contentRenderer.bind(this)({ viteId, contents, fileUrl: pathToFileURL(fileId) });
+					const fileId = viteId.split('?')[0];
+					return contentRenderer.bind(this)({ viteId, contents, fileUrl: pathToFileURL(fileId) });
+				},
 			},
 		});
 	}
@@ -209,7 +248,7 @@ type GetEntryModuleParams<TEntryType extends ContentEntryType | DataEntryType> =
 	fs: typeof fsMod;
 	fileId: string;
 	contentDir: URL;
-	pluginContext: PluginContext;
+	pluginContext: Rolldown.PluginContext;
 	entryConfigByExt: Map<string, TEntryType>;
 	config: AstroConfig;
 	shouldEmitFile: boolean;
@@ -378,21 +417,27 @@ async function getContentConfigFromGlobal() {
 }
 
 /** Stringify entry `data` at build time to be used as a Vite module */
-function stringifyEntryData(data: Record<string, any>, isSSR: boolean): string {
+function stringifyEntryData(
+	data: Record<string, any>,
+	isSSR: boolean,
+): { imports: string; code: string } {
+	let hasImageAsset = false;
 	try {
-		return devalue.uneval(data, (value) => {
+		const code = devalue.uneval(data, (value: any, js: devalue.JavaScriptTag) => {
 			// Add support for URL objects
 			if (value instanceof URL) {
-				return `new URL(${JSON.stringify(value.href)})`;
+				return js`new URL(${value.href})`;
 			}
 
-			// For Astro assets, add a proxy to track references
+			// For Astro assets, track references to their `src`
 			if (typeof value === 'object' && 'ASTRO_ASSET' in value) {
-				const { ASTRO_ASSET, ...asset } = value;
-				asset.fsPath = ASTRO_ASSET;
-				return getProxyCode(asset, isSSR);
+				// `createImageAsset` defines a non-enumerable `fsPath`, as for imported images.
+				const { ASTRO_ASSET, fsPath: _fsPath, ...asset } = value;
+				hasImageAsset = true;
+				return getImageAssetCode(js, asset, ASTRO_ASSET, !isSSR);
 			}
 		});
+		return { imports: hasImageAsset ? IMAGE_ASSET_IMPORT : '', code };
 	} catch (e) {
 		if (e instanceof Error) {
 			throw new AstroError({

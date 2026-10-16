@@ -1,6 +1,9 @@
-import type { YAMLException } from 'js-yaml';
+import type { YAMLParseError } from '@astrojs/internal-helpers/yaml';
+import type { TomlError } from 'smol-toml';
 import type { ErrorPayload as ViteErrorPayload } from 'vite';
-import type { SSRError } from '../../@types/astro.js';
+import type { SSRError } from '../../types/public/internal.js';
+
+export { isYAMLParseError } from '@astrojs/internal-helpers/yaml-error';
 
 /**
  * Get the line and character based on the offset
@@ -71,17 +74,34 @@ function getLineOffsets(text: string) {
 	return lineOffsets;
 }
 
-export function isYAMLException(err: unknown): err is YAMLException {
-	return err instanceof Error && err.name === 'YAMLException';
-}
-
 /** Format YAML exceptions as Vite errors */
-export function formatYAMLException(e: YAMLException): ViteErrorPayload['err'] {
+export function formatYAMLParseError(e: YAMLParseError): ViteErrorPayload['err'] {
+	const position = e.linePos?.[0];
+	const loc = position
+		? {
+				line: position.line,
+				column: position.col - 1,
+			}
+		: undefined;
 	return {
 		name: e.name,
-		id: e.mark.name,
-		loc: { file: e.mark.name, line: e.mark.line + 1, column: e.mark.column },
-		message: e.reason,
+		loc,
+		message: e.message,
+		stack: e.stack ?? '',
+	};
+}
+
+export function isTOMLError(err: unknown): err is TomlError {
+	return err instanceof Error && err.name === 'TomlError';
+}
+
+/** Format TOML exceptions as Vite errors */
+export function formatTOMLError(e: TomlError): ViteErrorPayload['err'] {
+	return {
+		name: e.name,
+		id: e.name,
+		loc: { line: e.line + 1, column: e.column },
+		message: e.message,
 		stack: e.stack ?? '',
 	};
 }

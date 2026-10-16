@@ -1,5 +1,464 @@
 # @astrojs/svelte
 
+## 9.1.0
+
+### Minor Changes
+
+- [#18277](https://github.com/withastro/astro/pull/18277) [`2715958`](https://github.com/withastro/astro/commit/2715958666b0a706b069d0592da3a070b3796a9b) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases the minimum Node.js version to 22.22.0
+  
+  The minimum supported Node.js version is now 22.22.0, the latest Node.js 22 release supported by StackBlitz. This change is in line with Astro's [Node.js support policy](https://docs.astro.build/en/upgrade-astro/#support).
+
+## 9.0.1
+
+### Patch Changes
+
+- [#17249](https://github.com/withastro/astro/pull/17249) [`02b73b0`](https://github.com/withastro/astro/commit/02b73b0fc2e32102e788fd9031ce061337490a73) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where the `peerDependencies` field used incorrect dependencies.
+
+## 9.0.0
+
+### Major Changes
+
+- [#15819](https://github.com/withastro/astro/pull/15819) [`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27) Thanks [@delucis](https://github.com/delucis)! - Upgrade to Vite v8
+
+### Minor Changes
+
+- [#17093](https://github.com/withastro/astro/pull/17093) [`4585fe5`](https://github.com/withastro/astro/commit/4585fe57dda06226058118f90a809f9e33d4b2af) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Replaces the import entrypoint of `getContainerRenderer()`
+
+  A new `container-renderer` entrypoint exporting `getContainerRenderer()` has been added to the following integrations: React, Preact, Svelte, SolidJS, Vue, and MDX. This prevents bundlers from trying to bundle unrelated exports from the package root when only the Container API is used.
+
+  If you are using the Container API, update your import statements to use the new entrypoint. The following example updates the `getContainerRenderer()` import for React:
+
+  ```diff
+  - import { getContainerRenderer } from '@astrojs/react';
+  + import { getContainerRenderer } from '@astrojs/react/container-renderer';
+  ```
+
+  Importing `getContainerRenderer()` from the package root still works, but is now deprecated and logs a warning.
+
+- [#16549](https://github.com/withastro/astro/pull/16549) [`9d9d516`](https://github.com/withastro/astro/commit/9d9d516ba95fb888d5e8c62892269cf047b523e9) Thanks [@ocavue](https://github.com/ocavue)! - Updates `@sveltejs/vite-plugin-svelte` to v7. No user action is necessary.
+
+### Patch Changes
+
+- [#17027](https://github.com/withastro/astro/pull/17027) [`241250b`](https://github.com/withastro/astro/commit/241250bf126f39c86a8aedd38df106e533301752) Thanks [@ocavue](https://github.com/ocavue)! - Triggers beta prereleases for packages that are still on alpha
+
+## 9.0.0-beta.4
+
+### Minor Changes
+
+- [#17093](https://github.com/withastro/astro/pull/17093) [`4585fe5`](https://github.com/withastro/astro/commit/4585fe57dda06226058118f90a809f9e33d4b2af) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Replaces the import entrypoint of `getContainerRenderer()`
+
+  A new `container-renderer` entrypoint exporting `getContainerRenderer()` has been added to the following integrations: React, Preact, Svelte, SolidJS, Vue, and MDX. This prevents bundlers from trying to bundle unrelated exports from the package root when only the Container API is used.
+
+  If you are using the Container API, update your import statements to use the new entrypoint. The following example updates the `getContainerRenderer()` import for React:
+
+  ```diff
+  - import { getContainerRenderer } from '@astrojs/react';
+  + import { getContainerRenderer } from '@astrojs/react/container-renderer';
+  ```
+
+  Importing `getContainerRenderer()` from the package root still works, but is now deprecated and logs a warning.
+
+## 9.0.0-beta.3
+
+### Patch Changes
+
+- [#17027](https://github.com/withastro/astro/pull/17027) [`241250b`](https://github.com/withastro/astro/commit/241250bf126f39c86a8aedd38df106e533301752) Thanks [@ocavue](https://github.com/ocavue)! - Triggers beta prereleases for packages that are still on alpha
+
+## 9.0.0-alpha.2
+
+### Minor Changes
+
+- [#16549](https://github.com/withastro/astro/pull/16549) [`9d9d516`](https://github.com/withastro/astro/commit/9d9d516ba95fb888d5e8c62892269cf047b523e9) Thanks [@ocavue](https://github.com/ocavue)! - Updates `@sveltejs/vite-plugin-svelte` to v7. No user action is necessary.
+
+## 9.0.0-alpha.0
+
+### Major Changes
+
+- [#15819](https://github.com/withastro/astro/pull/15819) [`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27) Thanks [@delucis](https://github.com/delucis)! - Upgrade to Vite v8
+
+### Patch Changes
+
+- Updated dependencies [[`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27), [`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27), [`c30a778`](https://github.com/withastro/astro/commit/c30a7789a477e44826c54c8560587d09dc46a229), [`ee079d4`](https://github.com/withastro/astro/commit/ee079d4c7f143076b84d663c832911009a077c7f)]:
+  - astro@7.0.0-alpha.0
+
+## 8.1.2
+
+### Patch Changes
+
+- [#16496](https://github.com/withastro/astro/pull/16496) [`4d79750`](https://github.com/withastro/astro/commit/4d79750c3535d35bbec521e8d93546bf73e2ea6a) Thanks [@fkatsuhiro](https://github.com/fkatsuhiro)! - Fixed an issue where type errors occurred during testing library type checks because Astro overrides Svelte 5 component types.
+
+## 8.1.1
+
+### Patch Changes
+
+- [#16642](https://github.com/withastro/astro/pull/16642) [`53059be`](https://github.com/withastro/astro/commit/53059bec978a5124fc61a23035cefbfc93754a01) Thanks [@ocavue](https://github.com/ocavue)! - Adds support for TypeScript v6 to peer dependencies range.
+
+## 8.1.0
+
+### Minor Changes
+
+- [#16466](https://github.com/withastro/astro/pull/16466) [`31b6198`](https://github.com/withastro/astro/commit/31b619824424974d04de8669a5f803b235361cff) Thanks [@fkatsuhiro](https://github.com/fkatsuhiro)! - This change updates the Svelte integration's type shims to treat non-children
+  snippet props and `any`-typed props as optional. Previously, these were
+  incorrectly marked as required in Astro files, causing false-positive type
+  errors when using Svelte 5 components.
+  - Adds `HandleSnippetProps` to make Snippets optional in Astro.
+  - Distinguishes between generic and non-generic components to preserve inference.
+  - Updates TSX generation to apply the appropriate directive wrapper.
+
+## 8.0.5
+
+### Patch Changes
+
+- [#16210](https://github.com/withastro/astro/pull/16210) [`e030bd0`](https://github.com/withastro/astro/commit/e030bd058457505b605ef573cfc71239baa963f0) Thanks [@matthewp](https://github.com/matthewp)! - Fixes `.svelte` files in `node_modules` failing with `Unknown file extension ".svelte"` when using the Cloudflare adapter with `prerenderEnvironment: 'node'`
+
+## 8.0.4
+
+### Patch Changes
+
+- [#15604](https://github.com/withastro/astro/pull/15604) [`3e1ac66`](https://github.com/withastro/astro/commit/3e1ac6675d80776dc72c8a8e5f7de35aa57f56e3) Thanks [@pierreeurope](https://github.com/pierreeurope)! - Adds a temporary workaround for a Svelte bug causing empty class attributes in SSR output.
+
+- [#16050](https://github.com/withastro/astro/pull/16050) [`89a7250`](https://github.com/withastro/astro/commit/89a7250e803ad86f2ad035f61909ea4c5942626c) Thanks [@seroperson](https://github.com/seroperson)! - Using a Svelte component with generic type parameters now correctly infer props in .astro files
+
+## 8.0.3
+
+### Patch Changes
+
+- [#15961](https://github.com/withastro/astro/pull/15961) [`7e8d0ee`](https://github.com/withastro/astro/commit/7e8d0ee9ca2e473a276ed5d400e40965ace4c3e8) Thanks [@matthewp](https://github.com/matthewp)! - Fix Cloudflare dev SSR dependency optimization to compile `.svelte.js` and `.svelte.ts` dependency modules that use Svelte runes.
+
+## 8.0.2
+
+### Patch Changes
+
+- [#15864](https://github.com/withastro/astro/pull/15864) [`d3c7de9`](https://github.com/withastro/astro/commit/d3c7de9253e9cb31fa5c4bf9f4bdf59dd1ada7b0) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Removes temporary support for Node >=20.19.1 because Stackblitz now uses Node 22 by default
+
+## 8.0.1
+
+### Patch Changes
+
+- [#15934](https://github.com/withastro/astro/pull/15934) [`6f8f0bc`](https://github.com/withastro/astro/commit/6f8f0bc4e22e958ccc2164acb1aa8cce21c43148) Thanks [@ematipico](https://github.com/ematipico)! - Updates the Astro `peerDependencies#astro` to be `6.0.0`.
+
+## 8.0.0
+
+### Major Changes
+
+- [#14427](https://github.com/withastro/astro/pull/14427) [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases minimum Node.js version to 22.12.0 - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#node-22))
+
+- [#14445](https://github.com/withastro/astro/pull/14445) [`ecb0b98`](https://github.com/withastro/astro/commit/ecb0b98396f639d830a99ddb5895ab9223e4dc87) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Astro v6.0 upgrades to Vite v7.0 as the development server and production bundler - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#vite-70))
+
+### Minor Changes
+
+- [#14821](https://github.com/withastro/astro/pull/14821) [`48ea241`](https://github.com/withastro/astro/commit/48ea2413ec6a248e097a741ecb9e1f8698871e28) Thanks [@ocavue](https://github.com/ocavue)! - Update `@sveltejs/vite-plugin-svelte` to v6.
+
+### Patch Changes
+
+- [#15125](https://github.com/withastro/astro/pull/15125) [`6feb0d7`](https://github.com/withastro/astro/commit/6feb0d7bec1e333eb795ae0fc51516182a73eb2b) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Improve Svelte `children` prop type checking
+
+- [#15264](https://github.com/withastro/astro/pull/15264) [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Lower the Node version requirement to allow running on Stackblitz until it supports v22
+
+- [#15581](https://github.com/withastro/astro/pull/15581) [`2851f10`](https://github.com/withastro/astro/commit/2851f1094c03d696682efb4f3b321ef27e29e88c) Thanks [@renovate](https://github.com/apps/renovate)! - Updates `svelte` to v5.51.5
+
+## 8.0.0-beta.3
+
+### Patch Changes
+
+- [#15581](https://github.com/withastro/astro/pull/15581) [`2851f10`](https://github.com/withastro/astro/commit/2851f1094c03d696682efb4f3b321ef27e29e88c) Thanks [@renovate](https://github.com/apps/renovate)! - Updates `svelte` to v5.51.5
+
+## 8.0.0-beta.2
+
+### Minor Changes
+
+- [#14821](https://github.com/withastro/astro/pull/14821) [`48ea241`](https://github.com/withastro/astro/commit/48ea2413ec6a248e097a741ecb9e1f8698871e28) Thanks [@ocavue](https://github.com/ocavue)! - Update `@sveltejs/vite-plugin-svelte` to v6.
+
+## 8.0.0-beta.1
+
+### Patch Changes
+
+- [#15264](https://github.com/withastro/astro/pull/15264) [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Lower the Node version requirement to allow running on Stackblitz until it supports v22
+
+## 8.0.0-beta.0
+
+### Patch Changes
+
+- [#15125](https://github.com/withastro/astro/pull/15125) [`6feb0d7`](https://github.com/withastro/astro/commit/6feb0d7bec1e333eb795ae0fc51516182a73eb2b) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Improve Svelte `children` prop type checking
+
+## 8.0.0-alpha.0
+
+### Major Changes
+
+- [#14427](https://github.com/withastro/astro/pull/14427) [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases minimum Node.js version to 22.12.0 - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#node-22))
+
+- [#14445](https://github.com/withastro/astro/pull/14445) [`ecb0b98`](https://github.com/withastro/astro/commit/ecb0b98396f639d830a99ddb5895ab9223e4dc87) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Astro v6.0 upgrades to Vite v7.0 as the development server and production bundler - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#vite-70))
+
+### Patch Changes
+
+- Updated dependencies [[`ece667a`](https://github.com/withastro/astro/commit/ece667a737a96c8bfea2702de7207bed0842b37c), [`861b9cc`](https://github.com/withastro/astro/commit/861b9cc770a05d9fcfcb2f1f442a3ba41e94b510), [`ece667a`](https://github.com/withastro/astro/commit/ece667a737a96c8bfea2702de7207bed0842b37c), [`9fdfd4c`](https://github.com/withastro/astro/commit/9fdfd4c620313827e65664632a9c9cb435ad07ca), [`91780cf`](https://github.com/withastro/astro/commit/91780cffa7cf97cc22694d55962710609a5475b0), [`9fdfd4c`](https://github.com/withastro/astro/commit/9fdfd4c620313827e65664632a9c9cb435ad07ca), [`b1d87ec`](https://github.com/withastro/astro/commit/b1d87ec3bc2fbe214437990e871df93909d18f62), [`049da87`](https://github.com/withastro/astro/commit/049da87cb7ce1828f3025062ce079dbf132f5b86), [`727b0a2`](https://github.com/withastro/astro/commit/727b0a205eb765f1c36f13a73dfc69e17e44df8f), [`55a1a91`](https://github.com/withastro/astro/commit/55a1a911aa4e0d38191f8cb9464ffd58f3eb7608), [`669ca5b`](https://github.com/withastro/astro/commit/669ca5b0199d9933f54c76448de9ec5a9f13c430), [`df6d2d7`](https://github.com/withastro/astro/commit/df6d2d7bbcaf6b6a327a37a6437d4adade6e2485), [`9fdfd4c`](https://github.com/withastro/astro/commit/9fdfd4c620313827e65664632a9c9cb435ad07ca), [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf), [`c69c7de`](https://github.com/withastro/astro/commit/c69c7de1ffeff29f919d97c262f245927556f875), [`666d5a7`](https://github.com/withastro/astro/commit/666d5a7ef486aa57f20f87b6cb210619dabd9c4c), [`4f11510`](https://github.com/withastro/astro/commit/4f11510c9ed932f5cb6d1075b1172909dd5db23e), [`25fe093`](https://github.com/withastro/astro/commit/25fe09396dbcda2e1008c01a982f4eb2d1f33ae6), [`9c282b5`](https://github.com/withastro/astro/commit/9c282b5e6d3f0d678bc478a863e883fa4765dd17), [`ecb0b98`](https://github.com/withastro/astro/commit/ecb0b98396f639d830a99ddb5895ab9223e4dc87), [`6f67c6e`](https://github.com/withastro/astro/commit/6f67c6eef2647ef1a1eab78a65a906ab633974bb), [`36a461b`](https://github.com/withastro/astro/commit/36a461bf3f64c467bc52aecf511cd831d238e18b), [`3bda3ce`](https://github.com/withastro/astro/commit/3bda3ce4edcb1bd1349890c6ed8110f05954c791)]:
+  - astro@6.0.0-alpha.0
+
+## 7.2.5
+
+### Patch Changes
+
+- [#15070](https://github.com/withastro/astro/pull/15070) [`fa9c464`](https://github.com/withastro/astro/commit/fa9c464ac3658fc1b5e1a9e49ce8ec3ec9eab102) Thanks [@antonyfaris](https://github.com/antonyfaris)! - Improve Svelte `children` prop type checking
+
+## 7.2.4
+
+### Patch Changes
+
+- [#15004](https://github.com/withastro/astro/pull/15004) [`16f3994`](https://github.com/withastro/astro/commit/16f3994fdb83d1b3421491c00bfd5ac9f7e37a5c) Thanks [@antonyfaris](https://github.com/antonyfaris)! - Fixes an issue where Svelte components used in Astro files would incorrectly report type errors when using `client:*` directives.
+
+## 7.2.3
+
+### Patch Changes
+
+- [#14934](https://github.com/withastro/astro/pull/14934) [`4264a36`](https://github.com/withastro/astro/commit/4264a3657155ca95c9bdaa7b8d0340422212374d) Thanks [@antonyfaris](https://github.com/antonyfaris)! - Fixes an issue where Svelte 5 components used in Astro files would not have proper type checking and IntelliSense.
+
+## 7.2.2
+
+### Patch Changes
+
+- [#14715](https://github.com/withastro/astro/pull/14715) [`3d55c5d`](https://github.com/withastro/astro/commit/3d55c5d0fb520d470b33d391e5b68861f5b51271) Thanks [@ascorbic](https://github.com/ascorbic)! - Adds support for client hydration in `getContainerRenderer()`
+
+  The `getContainerRenderer()` function is exported by Astro framework integrations to simplify the process of rendering framework components when using the experimental Container API inside a Vite or Vitest environment. This update adds the client hydration entrypoint to the returned object, enabling client-side interactivity for components rendered using this function. Previously this required users to manually call `container.addClientRenderer()` with the appropriate client renderer entrypoint.
+
+  See [the `container-with-vitest` demo](https://github.com/withastro/astro/blob/main/examples/container-with-vitest/test/ReactWrapper.test.ts) for a usage example, and [the Container API documentation](https://docs.astro.build/en/reference/container-reference/#renderers-option) for more information on using framework components with the experimental Container API.
+
+## 7.2.1
+
+### Patch Changes
+
+- [#14621](https://github.com/withastro/astro/pull/14621) [`e3175d9`](https://github.com/withastro/astro/commit/e3175d9ccbf070150ab2229b2564ca0b12a86c30) Thanks [@GameRoMan](https://github.com/GameRoMan)! - Updates `vite` version to fix CVE
+
+## 7.2.0
+
+### Minor Changes
+
+- [#14430](https://github.com/withastro/astro/pull/14430) [`78011ba`](https://github.com/withastro/astro/commit/78011ba4ee6cce6d42d246ee7b91a48b1509a3be) Thanks [@ascorbic](https://github.com/ascorbic)! - Adds support for async server rendering
+
+  Svelte 5.36 added experimental support for async rendering. This allows you to use `await` in your components in several new places. This worked out of the box with client-rendered components, but server-rendered components needed some extra help. This update adds support for async server rendering in Svelte components used in Astro.
+
+  To use async rendering, you must enable it in your Svelte config:
+
+  ```js
+  // svelte.config.js
+  export default {
+    compilerOptions: {
+      experimental: {
+        async: true,
+      },
+    },
+  };
+  ```
+
+  Then you can use `await` in your components:
+
+  ```svelte
+  <script>
+    let data = await fetch('/api/data').then(res => res.json());
+  </script>
+  <h1>{data.title}</h1>
+  ```
+
+  See [the Svelte docs](https://svelte.dev/docs/svelte/await-expressions) for more information on using `await` in Svelte components, including inside `$derived` blocks and directly in markup.
+
+### Patch Changes
+
+- [#14433](https://github.com/withastro/astro/pull/14433) [`9cc8f21`](https://github.com/withastro/astro/commit/9cc8f21a15492a80e2edae0e38c652174a8c3ba0) Thanks [@ascorbic](https://github.com/ascorbic)! - Fixes a bug that prevented Svelte 5.39.1+ components rendering when multiple frameworks were present
+
+## 7.1.1
+
+### Patch Changes
+
+- [#14326](https://github.com/withastro/astro/pull/14326) [`c24a8f4`](https://github.com/withastro/astro/commit/c24a8f42a17410ea78fc2d68ff0105b931a381eb) Thanks [@jsparkdev](https://github.com/jsparkdev)! - Updates `vite` version to fix CVE
+
+## 7.1.0
+
+### Minor Changes
+
+- [#13809](https://github.com/withastro/astro/pull/13809) [`3c3b492`](https://github.com/withastro/astro/commit/3c3b492375bd6a63f1fb6cede3685aff999be3c9) Thanks [@ascorbic](https://github.com/ascorbic)! - Increases minimum Node.js version to 18.20.8
+
+  Node.js 18 has now reached end-of-life and should not be used. For now, Astro will continue to support Node.js 18.20.8, which is the final LTS release of Node.js 18, as well as Node.js 20 and Node.js 22 or later. We will drop support for Node.js 18 in a future release, so we recommend upgrading to Node.js 22 as soon as possible. See Astro's [Node.js support policy](https://docs.astro.build/en/upgrade-astro/#support) for more details.
+
+  :warning: **Important note for users of Cloudflare Pages**: The current build image for Cloudflare Pages uses Node.js 18.17.1 by default, which is no longer supported by Astro. If you are using Cloudflare Pages you should [override the default Node.js version](https://developers.cloudflare.com/pages/configuration/build-image/#override-default-versions) to Node.js 22. This does not affect users of Cloudflare Workers, which uses Node.js 22 by default.
+
+## 7.0.13
+
+### Patch Changes
+
+- [#13731](https://github.com/withastro/astro/pull/13731) [`c3e80c2`](https://github.com/withastro/astro/commit/c3e80c25b90c803e2798b752583a8e77cdad3146) Thanks [@jsparkdev](https://github.com/jsparkdev)! - update vite to latest version for fixing CVE
+
+## 7.0.12
+
+### Patch Changes
+
+- [#13720](https://github.com/withastro/astro/pull/13720) [`e1cd1ae`](https://github.com/withastro/astro/commit/e1cd1ae52199c927ad5300a2eaed3996c6af5a64) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Fixes SSR renderer type
+
+## 7.0.11
+
+### Patch Changes
+
+- [#13663](https://github.com/withastro/astro/pull/13663) [`a19a185`](https://github.com/withastro/astro/commit/a19a185efd75334f2f417b433fcfaa0017fe41ee) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Improves type-safety of renderers
+
+## 7.0.10
+
+### Patch Changes
+
+- [#13596](https://github.com/withastro/astro/pull/13596) [`3752519`](https://github.com/withastro/astro/commit/375251966d1b28a570bff45ff0fe7e7d2fe46f72) Thanks [@jsparkdev](https://github.com/jsparkdev)! - update vite to latest version to fix CVE
+
+- [#13547](https://github.com/withastro/astro/pull/13547) [`360cb91`](https://github.com/withastro/astro/commit/360cb9199a4314f90825c5639ff4396760e9cfcc) Thanks [@jsparkdev](https://github.com/jsparkdev)! - Updates vite to the latest version
+
+## 7.0.9
+
+### Patch Changes
+
+- [#13526](https://github.com/withastro/astro/pull/13526) [`ff9d69e`](https://github.com/withastro/astro/commit/ff9d69e3443c80059c54f6296d19f66bb068ead3) Thanks [@jsparkdev](https://github.com/jsparkdev)! - update `vite` to the latest version
+
+## 7.0.8
+
+### Patch Changes
+
+- [#13505](https://github.com/withastro/astro/pull/13505) [`a98ae5b`](https://github.com/withastro/astro/commit/a98ae5b8f5c33900379012e9e253a755c0a8927e) Thanks [@ematipico](https://github.com/ematipico)! - Updates the dependency `vite` to the latest.
+
+## 7.0.7
+
+### Patch Changes
+
+- [#13470](https://github.com/withastro/astro/pull/13470) [`ecadb6b`](https://github.com/withastro/astro/commit/ecadb6b02e942feccf584547fe9c14d3d1e21ba6) Thanks [@ascorbic](https://github.com/ascorbic)! - Hides fallback content when rendering `client:only` island
+
+## 7.0.6
+
+### Patch Changes
+
+- [#13339](https://github.com/withastro/astro/pull/13339) [`a05e6ab`](https://github.com/withastro/astro/commit/a05e6ab7203e4f0eea6333699b6b7aec9f01752a) Thanks [@Hugos68](https://github.com/Hugos68)! - Fixes a case where `$props.id()` would not be unique across multiple islands
+
+## 7.0.5
+
+### Patch Changes
+
+- [#13323](https://github.com/withastro/astro/pull/13323) [`80926fa`](https://github.com/withastro/astro/commit/80926fadc06492fcae55f105582b9dc8279da6b3) Thanks [@ematipico](https://github.com/ematipico)! - Updates `esbuild` and `vite` to the latest to avoid false positives audits warnings caused by `esbuild`.
+
+## 7.0.4
+
+### Patch Changes
+
+- [#13011](https://github.com/withastro/astro/pull/13011) [`cf30880`](https://github.com/withastro/astro/commit/cf3088060d45227dcb48e041c4ed5e0081d71398) Thanks [@ascorbic](https://github.com/ascorbic)! - Upgrades Vite
+
+## 7.0.3
+
+### Patch Changes
+
+- [#12776](https://github.com/withastro/astro/pull/12776) [`8809b85`](https://github.com/withastro/astro/commit/8809b85747c1af4a772a3649ce8a8b3bb0f31236) Thanks [@aminevg](https://github.com/aminevg)! - Fixes an issue where TypeScript couldn't infer the correct types of the `server.mjs` file
+
+## 7.0.2
+
+### Patch Changes
+
+- [#12799](https://github.com/withastro/astro/pull/12799) [`739dbfb`](https://github.com/withastro/astro/commit/739dbfba4214107cf8fc40c702834dad33eed3b0) Thanks [@ascorbic](https://github.com/ascorbic)! - Upgrades Vite to pin esbuild
+
+## 7.0.1
+
+### Patch Changes
+
+- [#12594](https://github.com/withastro/astro/pull/12594) [`4f2fd0a`](https://github.com/withastro/astro/commit/4f2fd0a0d67a748af8b611b9afc7d4c789f7c8cc) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Fixes compatibility with Astro 5
+
+## 7.0.0
+
+### Major Changes
+
+- [#12060](https://github.com/withastro/astro/pull/12060) [`cb5d3ae`](https://github.com/withastro/astro/commit/cb5d3ae6ee6af646c9d7d46a9d8f551edac3092e) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Updates peer dependency range to support Astro 5
+
+- [#12524](https://github.com/withastro/astro/pull/12524) [`9f44019`](https://github.com/withastro/astro/commit/9f440196dc39f36fce0198bf4c97131160e5bcc1) Thanks [@bluwy](https://github.com/bluwy)! - Updates `@sveltejs/vite-plugin-svelte` to v5 to handle Vite 6
+
+- [#12524](https://github.com/withastro/astro/pull/12524) [`9f44019`](https://github.com/withastro/astro/commit/9f440196dc39f36fce0198bf4c97131160e5bcc1) Thanks [@bluwy](https://github.com/bluwy)! - Updates Vite dependency to v6 to match Astro v5
+
+### Minor Changes
+
+- [#12539](https://github.com/withastro/astro/pull/12539) [`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7) Thanks [@bluwy](https://github.com/bluwy)! - Drops node 21 support
+
+### Patch Changes
+
+- [#12102](https://github.com/withastro/astro/pull/12102) [`dcc1e89`](https://github.com/withastro/astro/commit/dcc1e895abbad1311719803363c933541c0ad984) Thanks [@hermit99](https://github.com/hermit99)! - Fixes an Reference Error that occurred during client transitions
+
+- [#12551](https://github.com/withastro/astro/pull/12551) [`b21a075`](https://github.com/withastro/astro/commit/b21a07500284a3621be4d509f5aa67c0a8fcbf07) Thanks [@ematipico](https://github.com/ematipico)! - New release to include changes from 5.7.3
+
+## 7.0.0-beta.1
+
+### Major Changes
+
+- [#12524](https://github.com/withastro/astro/pull/12524) [`9f44019`](https://github.com/withastro/astro/commit/9f440196dc39f36fce0198bf4c97131160e5bcc1) Thanks [@bluwy](https://github.com/bluwy)! - Updates `@sveltejs/vite-plugin-svelte` to v5 to handle Vite 6
+
+- [#12524](https://github.com/withastro/astro/pull/12524) [`9f44019`](https://github.com/withastro/astro/commit/9f440196dc39f36fce0198bf4c97131160e5bcc1) Thanks [@bluwy](https://github.com/bluwy)! - Updates Vite dependency to v6 to match Astro v5
+
+### Minor Changes
+
+- [#12539](https://github.com/withastro/astro/pull/12539) [`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7) Thanks [@bluwy](https://github.com/bluwy)! - Drops node 21 support
+
+## 6.0.2
+
+### Patch Changes
+
+- [#12481](https://github.com/withastro/astro/pull/12481) [`8a46e80`](https://github.com/withastro/astro/commit/8a46e8074d6afb4a23badbd59ed239d526294e8c) Thanks [@marbrex](https://github.com/marbrex)! - Resolve `vite` peer dependency problem for strict package managers like **Yarn in PnP mode**.
+
+- Updated dependencies [[`c48916c`](https://github.com/withastro/astro/commit/c48916cc4e6f7c31e3563d04b68a8698d8775b65), [`4364bff`](https://github.com/withastro/astro/commit/4364bff27332e52f92da72392620a36110daee42), [`c8f877c`](https://github.com/withastro/astro/commit/c8f877cad2d8f1780f70045413872d5b9d32ebed), [`8309c61`](https://github.com/withastro/astro/commit/8309c61f0dfa5991d3f6c5c5fca4403794d6fda2), [`af867f3`](https://github.com/withastro/astro/commit/af867f3910ecd8fc04a5337f591d84f03192e3fa), [`3f02d5f`](https://github.com/withastro/astro/commit/3f02d5f12b167514fff6eb9693b4e25c668e7a31)]:
+  - astro@5.0.0-beta.9
+
+## 6.0.1
+
+### Patch Changes
+
+- [#12442](https://github.com/withastro/astro/pull/12442) [`bde49f1`](https://github.com/withastro/astro/commit/bde49f186e4d620ce0c926353db38215e33dceef) Thanks [@bluwy](https://github.com/bluwy)! - Publishes missing file
+
+## 6.0.0
+
+### Major Changes
+
+- [#12364](https://github.com/withastro/astro/pull/12364) [`9fc2ab8`](https://github.com/withastro/astro/commit/9fc2ab8cc848739a21bfa3f754e9bec4926dc034) Thanks [@jdtjenkins](https://github.com/jdtjenkins)! - Adds support for Svelte 5. Svelte 3 and 4 are no longer supported.
+
+  The integration will now also no longer add `vitePreprocess()` by default if a preprocessor is not set up in `svelte.config.js`. It is recommended to set up the Svelte config manually so that features like IDE completion and syntax highlighting work properly.
+
+  If you're using SCSS, Stylus, etc in your Svelte component style tags, make sure that the preprocessor is also set up in `svelte.config.js`. For example:
+
+  ```js
+  // svelte.config.js
+  import { vitePreprocess } from '@astrojs/svelte';
+
+  export default {
+    preprocess: vitePreprocess(),
+  };
+  ```
+
+  Refer to the [Svelte 5 migration guide](https://svelte.dev/docs/svelte/v5-migration-guide) and [`@sveltejs/vite-plugin-svelte` changelog](https://github.com/sveltejs/vite-plugin-svelte/blob/main/packages/vite-plugin-svelte/CHANGELOG.md#400) for details of their respective breaking changes.
+
+## 6.0.0-beta.2
+
+### Patch Changes
+
+- [`b21a075`](https://github.com/withastro/astro/commit/b21a07500284a3621be4d509f5aa67c0a8fcbf07) Thanks [@bluwy](https://github.com/bluwy)! - New release to include changes from 5.7.3
+
+## 6.0.0-beta.1
+
+### Patch Changes
+
+- [#12102](https://github.com/withastro/astro/pull/12102) [`dcc1e89`](https://github.com/withastro/astro/commit/dcc1e895abbad1311719803363c933541c0ad984) Thanks [@hermit99](https://github.com/hermit99)! - Fixes an Reference Error that occurred during client transitions
+
+## 6.0.0-beta.0
+
+### Major Changes
+
+- [#12060](https://github.com/withastro/astro/pull/12060) [`cb5d3ae`](https://github.com/withastro/astro/commit/cb5d3ae6ee6af646c9d7d46a9d8f551edac3092e) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Updates peer dependency range to support Astro 5
+
+## 6.0.0-alpha.0
+
+### Patch Changes
+
+- Updated dependencies [[`b6fbdaa`](https://github.com/withastro/astro/commit/b6fbdaa94a9ecec706a99e1938fbf5cd028c72e0), [`89bab1e`](https://github.com/withastro/astro/commit/89bab1e70786123fbe933a9d7a1b80c9334dcc5f), [`d74617c`](https://github.com/withastro/astro/commit/d74617cbd3278feba05909ec83db2d73d57a153e), [`e90f559`](https://github.com/withastro/astro/commit/e90f5593d23043579611452a84b9e18ad2407ef9), [`2df49a6`](https://github.com/withastro/astro/commit/2df49a6fb4f6d92fe45f7429430abe63defeacd6), [`8a53517`](https://github.com/withastro/astro/commit/8a5351737d6a14fc55f1dafad8f3b04079e81af6)]:
+  - astro@5.0.0-alpha.0
+
+## 5.7.3
+
+### Patch Changes
+
+- [#12390](https://github.com/withastro/astro/pull/12390) [`6fd3d59`](https://github.com/withastro/astro/commit/6fd3d5960f5ab16591bfdb94d1f9b9a9b72006cf) Thanks [@bluwy](https://github.com/bluwy)! - Adds support for Svelte 5's new `@render` syntax while maintaining backward compatibility with traditional slots.
+
 ## 5.7.2
 
 ### Patch Changes

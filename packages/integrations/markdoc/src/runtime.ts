@@ -1,4 +1,4 @@
-import type { MarkdownHeading } from '@astrojs/markdown-remark';
+import type { MarkdownHeading } from '@astrojs/internal-helpers/markdown';
 import Markdoc, {
 	type ConfigType,
 	type Node,
@@ -38,6 +38,7 @@ export async function setupConfig(
 		merged = mergeConfig(merged, HTML_CONFIG);
 	}
 
+	syncTagNodeAttributes(merged);
 	return merged;
 }
 
@@ -54,6 +55,7 @@ export function setupConfigSync(
 		merged = mergeConfig(merged, HTML_CONFIG);
 	}
 
+	syncTagNodeAttributes(merged);
 	return merged;
 }
 
@@ -98,6 +100,65 @@ export function mergeConfig(
 	};
 }
 
+/**
+ * Sync custom attributes between tags and nodes that share the same name.
+ * In Markdoc, `table` exists as both a tag (`{% table %}`) and a node (the inner
+ * table structure). Attributes on the tag propagate to the child node in the AST,
+ * so both schemas must declare the same attributes for validation to pass.
+ * When users configure attributes on only one side, this copies them to the other.
+ */
+function syncTagNodeAttributes(config: MergedConfig): void {
+	// Markdoc's types don't have a string index signature, so we need the explicit
+	// type to index with a dynamic key in the loop below
+	const builtinTags: Record<string, any> = Markdoc.tags;
+	const builtinNodes: Record<string, any> = Markdoc.nodes;
+
+	for (const name of Object.keys(builtinTags)) {
+		if (!(name in builtinNodes)) continue;
+
+		const tagSchema = config.tags[name];
+		const nodeSchema = config.nodes[name as NodeType];
+		const tagAttrs = tagSchema?.attributes;
+		const nodeAttrs = nodeSchema?.attributes;
+
+		// Nothing to sync if neither side has custom attributes
+		if (!tagAttrs && !nodeAttrs) continue;
+
+		const mergedAttrs = { ...tagAttrs, ...nodeAttrs };
+
+		if (tagSchema) {
+			config.tags[name] = { ...tagSchema, attributes: mergedAttrs };
+		} else {
+			config.tags[name] = { ...builtinTags[name], attributes: mergedAttrs };
+		}
+
+		if (nodeSchema) {
+			config.nodes[name as NodeType] = { ...nodeSchema, attributes: mergedAttrs };
+		} else {
+			config.nodes[name as NodeType] = { ...builtinNodes[name], attributes: mergedAttrs };
+		}
+	}
+}
+
+/**
+ * Check if a transform is a built-in Markdoc transform (from `Markdoc.nodes` or `Markdoc.tags`).
+ * Built-in Markdoc transforms don't respect the `render` property, so they need to be removed
+ * when a custom `render` component is specified. Non-built-in transforms (user-written or Astro's
+ * own, like for headings) are preserved — they are assumed to handle `render` correctly.
+ */
+function isBuiltinMarkdocTransform(
+	transform: (...args: any[]) => unknown,
+	configKey: string,
+): boolean {
+	const builtinNode = (
+		Markdoc.nodes as Record<string, { transform?: (...args: any[]) => unknown } | undefined>
+	)[configKey];
+	const builtinTag = (
+		Markdoc.tags as Record<string, { transform?: (...args: any[]) => unknown } | undefined>
+	)[configKey];
+	return transform === builtinNode?.transform || transform === builtinTag?.transform;
+}
+
 export function resolveComponentImports(
 	markdocConfig: Required<Pick<AstroMarkdocConfig, 'tags' | 'nodes'>>,
 	tagComponentMap: Record<string, AstroInstance['default']>,
@@ -105,11 +166,31 @@ export function resolveComponentImports(
 ) {
 	for (const [tag, render] of Object.entries(tagComponentMap)) {
 		const config = markdocConfig.tags[tag];
-		if (config) config.render = render;
+		if (config) {
+			config.render = render;
+			// When a custom `render` component is specified and the transform is a
+			// built-in Markdoc transform, remove it so `render` wins. Built-in
+			// transforms (e.g., from `...Markdoc.nodes.fence`) don't respect the
+			// `render` property. User-written transforms are always preserved.
+			// See https://github.com/withastro/astro/issues/9708
+			if (config.transform && isBuiltinMarkdocTransform(config.transform, tag)) {
+				delete config.transform;
+			}
+		}
 	}
 	for (const [node, render] of Object.entries(nodeComponentMap)) {
 		const config = markdocConfig.nodes[node as NodeType];
-		if (config) config.render = render;
+		if (config) {
+			config.render = render;
+			// When a custom `render` component is specified and the transform is a
+			// built-in Markdoc transform, remove it so `render` wins. Built-in
+			// transforms (e.g., from `...Markdoc.nodes.fence`) don't respect the
+			// `render` property. User-written transforms are always preserved.
+			// See https://github.com/withastro/astro/issues/9708
+			if (config.transform && isBuiltinMarkdocTransform(config.transform, node)) {
+				delete config.transform;
+			}
+		}
 	}
 	return markdocConfig;
 }

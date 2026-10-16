@@ -10,6 +10,10 @@ export const perf: AuditRuleWithSelector[] = [
 		message: 'This image could be replaced with the Image component to improve performance.',
 		selector: 'img:not([data-image-component])',
 		async match(element) {
+			// Skip images inside framework components (React, Vue, Svelte, etc.)
+			// These are wrapped in astro-island and can't directly use Astro's Image component
+			if (element.closest('astro-island')) return false;
+
 			const src = element.getAttribute('src');
 			if (!src) return false;
 
@@ -35,8 +39,14 @@ export const perf: AuditRuleWithSelector[] = [
 			'img:not([loading]), img[loading="eager"], iframe:not([loading]), iframe[loading="eager"]',
 		match(element) {
 			const htmlElement = element as HTMLImageElement | HTMLIFrameElement;
+
 			// Ignore elements that are above the fold, they should be loaded eagerly
-			const elementYPosition = htmlElement.getBoundingClientRect().y + window.scrollY;
+			let currentElement = element as HTMLElement;
+			let elementYPosition = 0;
+			while (currentElement) {
+				elementYPosition += currentElement.offsetTop;
+				currentElement = currentElement.offsetParent as HTMLElement;
+			}
 			if (elementYPosition < window.innerHeight) return false;
 
 			// Ignore elements using `data:` URI, the `loading` attribute doesn't do anything for these
@@ -55,7 +65,12 @@ export const perf: AuditRuleWithSelector[] = [
 			const htmlElement = element as HTMLImageElement | HTMLIFrameElement;
 
 			// Ignore elements that are below the fold, they should be loaded lazily
-			const elementYPosition = htmlElement.getBoundingClientRect().y + window.scrollY;
+			let currentElement = element as HTMLElement;
+			let elementYPosition = 0;
+			while (currentElement) {
+				elementYPosition += currentElement.offsetTop;
+				currentElement = currentElement.offsetParent as HTMLElement;
+			}
 			if (elementYPosition > window.innerHeight) return false;
 
 			// Ignore elements using `data:` URI, the `loading` attribute doesn't do anything for these
@@ -98,7 +113,7 @@ export const perf: AuditRuleWithSelector[] = [
 			const serverRenderTime = element.getAttribute('server-render-time');
 			if (!serverRenderTime) return false;
 
-			const renderingTime = parseFloat(serverRenderTime);
+			const renderingTime = Number.parseFloat(serverRenderTime);
 			if (Number.isNaN(renderingTime)) return false;
 
 			return renderingTime > 500;
@@ -116,7 +131,7 @@ export const perf: AuditRuleWithSelector[] = [
 			const clientRenderTime = element.getAttribute('client-render-time');
 			if (!clientRenderTime) return false;
 
-			const renderingTime = parseFloat(clientRenderTime);
+			const renderingTime = Number.parseFloat(clientRenderTime);
 			if (Number.isNaN(renderingTime)) return false;
 
 			return renderingTime > 500;
@@ -126,7 +141,7 @@ export const perf: AuditRuleWithSelector[] = [
 
 function getCleanRenderingTime(time: string | null) {
 	if (!time) return 'unknown';
-	const renderingTime = parseFloat(time);
+	const renderingTime = Number.parseFloat(time);
 	if (Number.isNaN(renderingTime)) return 'unknown';
 
 	return renderingTime.toFixed(2) + 's';

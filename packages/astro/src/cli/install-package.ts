@@ -1,15 +1,15 @@
+import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import boxen from 'boxen';
+import { pathToFileURL } from 'node:url';
+import * as clack from '@clack/prompts';
 import ci from 'ci-info';
-import { bold, cyan, dim, magenta } from 'kleur/colors';
-import ora from 'ora';
-import preferredPM from 'preferred-pm';
-import prompts from 'prompts';
-import { exec } from 'tinyexec';
-import whichPm from 'which-pm';
-import type { Logger } from '../core/logger/core.js';
+import { detect, resolveCommand } from 'package-manager-detector';
+import colors from 'piccolore';
+import type { AstroLogger } from '../core/logger/core.js';
+import { exec } from './exec.js';
 
 const require = createRequire(import.meta.url);
+const { bold, cyan, dim, magenta } = colors;
 
 type GetPackageOptions = {
 	skipAsk?: boolean;
@@ -17,17 +17,30 @@ type GetPackageOptions = {
 	cwd?: string;
 };
 
+export async function getPackageVersion(
+	packageName: string,
+	cwd = process.cwd(),
+): Promise<string | undefined> {
+	try {
+		const packageJsonPath = require.resolve(`${packageName}/package.json`, { paths: [cwd] });
+		const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
+		return typeof packageJson.version === 'string' ? packageJson.version : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export async function getPackage<T>(
 	packageName: string,
-	logger: Logger,
+	logger: AstroLogger,
 	options: GetPackageOptions,
 	otherDeps: string[] = [],
 ): Promise<T | undefined> {
 	try {
 		// Try to resolve with `createRequire` first to prevent ESM caching of the package
 		// if it errors and fails here
-		require.resolve(packageName, { paths: [options.cwd ?? process.cwd()] });
-		const packageImport = await import(packageName);
+		const resolved = require.resolve(packageName, { paths: [options.cwd ?? process.cwd()] });
+		const packageImport = await import(pathToFileURL(resolved).href);
 		return packageImport as T;
 	} catch {
 		if (options.optional) return undefined;
@@ -48,7 +61,8 @@ export async function getPackage<T>(
 		const result = await installPackage([packageName, ...otherDeps], options, logger);
 
 		if (result) {
-			const packageImport = await import(packageName);
+			const resolved = require.resolve(packageName, { paths: [options.cwd ?? process.cwd()] });
+			const packageImport = await import(pathToFileURL(resolved).href);
 			return packageImport;
 		} else {
 			return undefined;
@@ -56,102 +70,67 @@ export async function getPackage<T>(
 	}
 }
 
-function getInstallCommand(packages: string[], packageManager: string) {
-	switch (packageManager) {
-		case 'npm':
-			return { pm: 'npm', command: 'install', flags: [], dependencies: packages };
-		case 'yarn':
-			return { pm: 'yarn', command: 'add', flags: [], dependencies: packages };
-		case 'pnpm':
-			return { pm: 'pnpm', command: 'add', flags: [], dependencies: packages };
-		case 'bun':
-			return { pm: 'bun', command: 'add', flags: [], dependencies: packages };
-		default:
-			return null;
-	}
-}
-
-/**
- * Get the command to execute and download a package (e.g. `npx`, `yarn dlx`, `pnpm dlx`, etc.)
- * @param packageManager - Optional package manager to use. If not provided, Astro will attempt to detect the preferred package manager.
- * @returns The command to execute and download a package
- */
-export async function getExecCommand(packageManager?: string): Promise<string> {
-	if (!packageManager) {
-		packageManager = (await preferredPM(process.cwd()))?.name ?? 'npm';
-	}
-
-	switch (packageManager) {
-		case 'npm':
-			return 'npx';
-		case 'yarn':
-			return 'yarn dlx';
-		case 'pnpm':
-			return 'pnpm dlx';
-		case 'bun':
-			return 'bunx';
-		default:
-			return 'npx';
-	}
-}
-
 async function installPackage(
 	packageNames: string[],
 	options: GetPackageOptions,
-	logger: Logger,
+	logger: AstroLogger,
 ): Promise<boolean> {
 	const cwd = options.cwd ?? process.cwd();
-	const packageManager = (await whichPm(cwd))?.name ?? 'npm';
-	const installCommand = getInstallCommand(packageNames, packageManager);
+	const packageManager = await detect({
+		cwd,
+		// Include the `install-metadata` strategy to have the package manager that's
+		// used for installation take precedence
+		strategies: ['install-metadata', 'lockfile', 'packageManager-field', 'devEngines-field'],
+	});
+	const installCommand = resolveCommand(packageManager?.agent ?? 'npm', 'add', []);
+	if (!installCommand) return false;
 
-	if (!installCommand) {
-		return false;
+	if (installCommand.command === 'deno') {
+		// Deno requires npm prefix to install packages
+		packageNames = packageNames.map((name) => `npm:${name}`);
 	}
-
-	const coloredOutput = `${bold(installCommand.pm)} ${installCommand.command}${[
-		'',
-		...installCommand.flags,
-	].join(' ')} ${cyan(installCommand.dependencies.join(' '))}`;
-	const message = `\n${boxen(coloredOutput, {
-		margin: 0.5,
-		padding: 0.5,
-		borderStyle: 'round',
-	})}\n`;
+	const coloredOutput = `${bold(installCommand.command)} ${installCommand.args.join(' ')} ${cyan(packageNames.join(' '))}`;
 	logger.info(
 		'SKIP_FORMAT',
 		`\n  ${magenta('Astro will run the following command:')}\n  ${dim(
 			'If you skip this step, you can always run it yourself later',
-		)}\n${message}`,
+		)}`,
 	);
+	clack.box(coloredOutput, undefined, {
+		rounded: true,
+		withGuide: false,
+		width: 'auto',
+	});
 
 	let response;
 	if (options.skipAsk) {
 		response = true;
 	} else {
-		response = (
-			await prompts({
-				type: 'confirm',
-				name: 'askToContinue',
-				message: 'Continue?',
-				initial: true,
-			})
-		).askToContinue;
+		response =
+			(await clack.confirm({
+				message: colors.bold('Continue?'),
+				initialValue: true,
+				withGuide: false,
+			})) === true;
 	}
 
 	if (Boolean(response)) {
-		const spinner = ora('Installing dependencies...').start();
+		const spinner = clack.spinner({ withGuide: false });
+		spinner.start('Installing dependencies...');
 		try {
-			await exec(
-				installCommand.pm,
-				[installCommand.command, ...installCommand.flags, ...installCommand.dependencies],
-				{ nodeOptions: { cwd: cwd } },
-			);
-			spinner.succeed();
+			await exec(installCommand.command, [...installCommand.args, ...packageNames], {
+				nodeOptions: {
+					cwd,
+					// reset NODE_ENV to ensure install command run in dev mode
+					env: { NODE_ENV: undefined },
+				},
+			});
+			spinner.stop('Dependencies installed.');
 
 			return true;
 		} catch (err) {
 			logger.debug('add', 'Error installing dependencies', err);
-			spinner.fail();
+			spinner.error('Failed to install dependencies.');
 
 			return false;
 		}
@@ -201,7 +180,7 @@ let _registry: string;
 async function getRegistry(): Promise<string> {
 	if (_registry) return _registry;
 	const fallback = 'https://registry.npmjs.org';
-	const packageManager = (await preferredPM(process.cwd()))?.name || 'npm';
+	const packageManager = (await detect())?.name || 'npm';
 	try {
 		const { stdout } = await exec(packageManager, ['config', 'get', 'registry']);
 		_registry = stdout.trim()?.replace(/\/$/, '') || fallback;

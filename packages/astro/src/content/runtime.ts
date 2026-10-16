@@ -1,11 +1,13 @@
-import type { MarkdownHeading } from '@astrojs/markdown-remark';
-import { Traverse } from 'neotraverse/modern';
-import pLimit from 'p-limit';
-import { ZodIssueCode, z } from 'zod';
-import type { GetImageResult, ImageMetadata } from '../@types/astro.js';
+import type { MarkdownHeading } from '@astrojs/internal-helpers/markdown';
+import { escape } from 'html-escaper';
+import * as z from 'zod/v4';
+import type * as zCore from 'zod/v4/core';
+import type { GetImageResult, ImageMetadata } from '../assets/types.js';
+import { createSvgComponent } from '../assets/runtime.js';
 import { imageSrcToImportId } from '../assets/utils/resolveImports.js';
-import { AstroError, AstroErrorData, AstroUserError } from '../core/errors/index.js';
-import { prependForwardSlash } from '../core/path.js';
+import { recordContentEntryRender } from '../core/render-scope/record.js';
+import { AstroError, AstroErrorData } from '../core/errors/index.js';
+import { isRemotePath, prependForwardSlash } from '../core/path.js';
 import {
 	type AstroComponentFactory,
 	createComponent,
@@ -17,80 +19,113 @@ import {
 	render as serverRender,
 	unescapeHTML,
 } from '../runtime/server/index.js';
-import { CONTENT_LAYER_TYPE, IMAGE_IMPORT_PREFIX } from './consts.js';
+import type {
+	CacheHint,
+	LiveDataCollectionResult,
+	LiveDataEntry,
+	LiveDataEntryResult,
+} from '../types/public/content.js';
+import { defineCollection as defineCollectionOrig } from './config.js';
+import type { LIVE_CONTENT_TYPE } from './consts.js';
 import { type DataEntry, globalDataStore } from './data-store.js';
-import type { ContentLookupMap } from './utils.js';
-
+import {
+	LiveCollectionCacheHintError,
+	LiveCollectionError,
+	LiveCollectionValidationError,
+	LiveEntryNotFoundError,
+} from './loaders/errors.js';
+import type { LiveLoader } from './loaders/types.js';
+import type { AstroLogger } from '../core/logger/core.js';
+export {
+	LiveCollectionError,
+	LiveCollectionCacheHintError,
+	LiveEntryNotFoundError,
+	LiveCollectionValidationError,
+};
 type LazyImport = () => Promise<any>;
-type GlobResult = Record<string, LazyImport>;
-type CollectionToEntryMap = Record<string, GlobResult>;
-type GetEntryImport = (collection: string, lookupId: string) => Promise<LazyImport>;
+type LiveCollectionConfigMap = Record<
+	string,
+	{ loader: LiveLoader; type: typeof LIVE_CONTENT_TYPE; schema?: zCore.$ZodType }
+>;
 
-export function defineCollection(config: any) {
-	if ('loader' in config) {
-		if (config.type && config.type !== CONTENT_LAYER_TYPE) {
-			throw new AstroUserError(
-				'Collections that use the Content Layer API must have a `loader` defined and no `type` set.',
-				"Check your collection definitions in `src/content/config.*`.'",
-			);
+const cacheHintSchema = z.object({
+	tags: z.array(z.string()).optional(),
+	lastModified: z.date().optional(),
+});
+
+async function parseLiveEntry(
+	entry: LiveDataEntry,
+	schema: zCore.$ZodType,
+	collection: string,
+): Promise<{ entry?: LiveDataEntry; error?: LiveCollectionError }> {
+	try {
+		const parsed = await z.safeParseAsync(schema, entry.data);
+		if (!parsed.success) {
+			return {
+				error: new LiveCollectionValidationError(collection, entry.id, parsed.error),
+			};
 		}
-		config.type = CONTENT_LAYER_TYPE;
-	}
-	if (!config.type) config.type = 'content';
-	return config;
-}
+		if (entry.cacheHint) {
+			const cacheHint = cacheHintSchema.safeParse(entry.cacheHint);
 
-export function createCollectionToGlobResultMap({
-	globResult,
-	contentDir,
-}: {
-	globResult: GlobResult;
-	contentDir: string;
-}) {
-	const collectionToGlobResultMap: CollectionToEntryMap = {};
-	for (const key in globResult) {
-		const keyRelativeToContentDir = key.replace(new RegExp(`^${contentDir}`), '');
-		const segments = keyRelativeToContentDir.split('/');
-		if (segments.length <= 1) continue;
-		const collection = segments[0];
-		collectionToGlobResultMap[collection] ??= {};
-		collectionToGlobResultMap[collection][key] = globResult[key];
+			if (!cacheHint.success) {
+				return {
+					error: new LiveCollectionCacheHintError(collection, entry.id, cacheHint.error),
+				};
+			}
+			entry.cacheHint = cacheHint.data;
+		}
+		return {
+			entry: {
+				...entry,
+				data: parsed.data as Record<string, unknown>,
+			},
+		};
+	} catch (error) {
+		return {
+			error: new LiveCollectionError(
+				collection,
+				`Unexpected error parsing entry ${entry.id} in collection ${collection}`,
+				error as Error,
+			),
+		};
 	}
-	return collectionToGlobResultMap;
 }
 
 export function createGetCollection({
-	contentCollectionToEntryMap,
-	dataCollectionToEntryMap,
-	getRenderEntryImport,
-	cacheEntriesByCollection,
+	liveCollections,
+	logger,
 }: {
-	contentCollectionToEntryMap: CollectionToEntryMap;
-	dataCollectionToEntryMap: CollectionToEntryMap;
-	getRenderEntryImport: GetEntryImport;
-	cacheEntriesByCollection: Map<string, any[]>;
+	liveCollections: LiveCollectionConfigMap;
+	logger: AstroLogger;
 }) {
-	return async function getCollection(collection: string, filter?: (entry: any) => unknown) {
+	return async function getCollection(
+		collection: string,
+		filter?: ((entry: any) => unknown) | Record<string, unknown>,
+	) {
+		if (collection in liveCollections) {
+			throw new AstroError({
+				...AstroErrorData.UnknownContentCollectionError,
+				message: `Collection "${collection}" is a live collection. Use getLiveCollection() instead of getCollection().`,
+			});
+		}
+
 		const hasFilter = typeof filter === 'function';
 		const store = await globalDataStore.get();
-		let type: 'content' | 'data';
-		if (collection in contentCollectionToEntryMap) {
-			type = 'content';
-		} else if (collection in dataCollectionToEntryMap) {
-			type = 'data';
-		} else if (store.hasCollection(collection)) {
+		if (await store.hasCollection(collection)) {
 			// @ts-expect-error	virtual module
 			const { default: imageAssetMap } = await import('astro:asset-imports');
 
 			const result = [];
-			for (const rawEntry of store.values<DataEntry>(collection)) {
-				const data = updateImageReferencesInData(rawEntry.data, rawEntry.filePath, imageAssetMap);
+			for (const rawEntry of await store.values<DataEntry>(collection)) {
+				const data = resolveEntryData(rawEntry, imageAssetMap);
 
-				const entry = {
+				let entry = {
 					...rawEntry,
 					data,
 					collection,
 				};
+
 				if (hasFilter && !filter(entry)) {
 					continue;
 				}
@@ -98,142 +133,14 @@ export function createGetCollection({
 			}
 			return result;
 		} else {
-			console.warn(
+			logger.warn(
+				'content',
 				`The collection ${JSON.stringify(
 					collection,
-				)} does not exist or is empty. Ensure a collection directory with this name exists.`,
+				)} does not exist or is empty. Please check your content config file for errors.`,
 			);
 			return [];
 		}
-
-		const lazyImports = Object.values(
-			type === 'content'
-				? contentCollectionToEntryMap[collection]
-				: dataCollectionToEntryMap[collection],
-		);
-		let entries: any[] = [];
-		// Cache `getCollection()` calls in production only
-		// prevents stale cache in development
-		if (!import.meta.env?.DEV && cacheEntriesByCollection.has(collection)) {
-			entries = cacheEntriesByCollection.get(collection)!;
-		} else {
-			const limit = pLimit(10);
-			entries = await Promise.all(
-				lazyImports.map((lazyImport) =>
-					limit(async () => {
-						const entry = await lazyImport();
-						return type === 'content'
-							? {
-									id: entry.id,
-									slug: entry.slug,
-									body: entry.body,
-									collection: entry.collection,
-									data: entry.data,
-									async render() {
-										return render({
-											collection: entry.collection,
-											id: entry.id,
-											renderEntryImport: await getRenderEntryImport(collection, entry.slug),
-										});
-									},
-								}
-							: {
-									id: entry.id,
-									collection: entry.collection,
-									data: entry.data,
-								};
-					}),
-				),
-			);
-			cacheEntriesByCollection.set(collection, entries);
-		}
-		if (hasFilter) {
-			return entries.filter(filter);
-		} else {
-			// Clone the array so users can safely mutate it.
-			// slice() is faster than ...spread for large arrays.
-			return entries.slice();
-		}
-	};
-}
-
-export function createGetEntryBySlug({
-	getEntryImport,
-	getRenderEntryImport,
-	collectionNames,
-}: {
-	getEntryImport: GetEntryImport;
-	getRenderEntryImport: GetEntryImport;
-	collectionNames: Set<string>;
-}) {
-	return async function getEntryBySlug(collection: string, slug: string) {
-		const store = await globalDataStore.get();
-
-		if (!collectionNames.has(collection)) {
-			if (store.hasCollection(collection)) {
-				throw new AstroError({
-					...AstroErrorData.GetEntryDeprecationError,
-					message: AstroErrorData.GetEntryDeprecationError.message(collection, 'getEntryBySlug'),
-				});
-			}
-			console.warn(`The collection ${JSON.stringify(collection)} does not exist.`);
-			return undefined;
-		}
-
-		const entryImport = await getEntryImport(collection, slug);
-		if (typeof entryImport !== 'function') return undefined;
-
-		const entry = await entryImport();
-
-		return {
-			id: entry.id,
-			slug: entry.slug,
-			body: entry.body,
-			collection: entry.collection,
-			data: entry.data,
-			async render() {
-				return render({
-					collection: entry.collection,
-					id: entry.id,
-					renderEntryImport: await getRenderEntryImport(collection, slug),
-				});
-			},
-		};
-	};
-}
-
-export function createGetDataEntryById({
-	getEntryImport,
-	collectionNames,
-}: {
-	getEntryImport: GetEntryImport;
-	collectionNames: Set<string>;
-}) {
-	return async function getDataEntryById(collection: string, id: string) {
-		const store = await globalDataStore.get();
-
-		if (!collectionNames.has(collection)) {
-			if (store.hasCollection(collection)) {
-				throw new AstroError({
-					...AstroErrorData.GetEntryDeprecationError,
-					message: AstroErrorData.GetEntryDeprecationError.message(collection, 'getDataEntryById'),
-				});
-			}
-			console.warn(`The collection ${JSON.stringify(collection)} does not exist.`);
-			return undefined;
-		}
-
-		const lazyImport = await getEntryImport(collection, id);
-
-		// TODO: AstroError
-		if (!lazyImport) throw new Error(`Entry ${collection} → ${id} was not found.`);
-		const entry = await lazyImport();
-
-		return {
-			id: entry.id,
-			collection: entry.collection,
-			data: entry.data,
-		};
 	};
 }
 
@@ -243,6 +150,7 @@ type ContentEntryResult = {
 	body: string;
 	collection: string;
 	data: Record<string, any>;
+	digest?: string | number;
 	render(): Promise<RenderResult>;
 };
 
@@ -250,35 +158,34 @@ type DataEntryResult = {
 	id: string;
 	collection: string;
 	data: Record<string, any>;
+	digest?: string | number;
 };
 
 type EntryLookupObject = { collection: string; id: string } | { collection: string; slug: string };
 
 export function createGetEntry({
-	getEntryImport,
-	getRenderEntryImport,
-	collectionNames,
+	liveCollections,
+	logger,
 }: {
-	getEntryImport: GetEntryImport;
-	getRenderEntryImport: GetEntryImport;
-	collectionNames: Set<string>;
+	liveCollections: LiveCollectionConfigMap;
+	logger: AstroLogger;
 }) {
 	return async function getEntry(
 		// Can either pass collection and identifier as 2 positional args,
 		// Or pass a single object with the collection and identifier as properties.
 		// This means the first positional arg can have different shapes.
 		collectionOrLookupObject: string | EntryLookupObject,
-		_lookupId?: string,
+		lookup?: string | Record<string, unknown>,
 	): Promise<ContentEntryResult | DataEntryResult | undefined> {
-		let collection: string, lookupId: string;
+		let collection: string, lookupId: string | Record<string, unknown>;
 		if (typeof collectionOrLookupObject === 'string') {
 			collection = collectionOrLookupObject;
-			if (!_lookupId)
+			if (!lookup)
 				throw new AstroError({
 					...AstroErrorData.UnknownContentCollectionError,
 					message: '`getEntry()` requires an entry identifier as the second argument.',
 				});
-			lookupId = _lookupId;
+			lookupId = lookup;
 		} else {
 			collection = collectionOrLookupObject.collection;
 			// Identifier could be `slug` for content entries, or `id` for data entries
@@ -288,58 +195,74 @@ export function createGetEntry({
 					: collectionOrLookupObject.slug;
 		}
 
+		if (collection in liveCollections) {
+			throw new AstroError({
+				...AstroErrorData.UnknownContentCollectionError,
+				message: `Collection "${collection}" is a live collection. Use getLiveEntry() instead of getEntry().`,
+			});
+		}
+		if (typeof lookupId === 'object') {
+			throw new AstroError({
+				...AstroErrorData.UnknownContentCollectionError,
+				message: `The entry identifier must be a string. Received object.`,
+			});
+		}
 		const store = await globalDataStore.get();
 
-		if (store.hasCollection(collection)) {
-			const entry = store.get<DataEntry>(collection, lookupId);
+		if (await store.hasCollection(collection)) {
+			const entry = await store.get<DataEntry>(collection, lookupId);
 			if (!entry) {
-				console.warn(`Entry ${collection} → ${lookupId} was not found.`);
+				logger.warn('content', `Entry ${collection} → ${lookupId} was not found.`);
 				return;
 			}
 
 			// @ts-expect-error	virtual module
 			const { default: imageAssetMap } = await import('astro:asset-imports');
-			entry.data = updateImageReferencesInData(entry.data, entry.filePath, imageAssetMap);
-			return {
+			const data = resolveEntryData(entry, imageAssetMap);
+			const result = {
 				...entry,
+				data,
 				collection,
 			} as DataEntryResult | ContentEntryResult;
+			// TODO: remove in Astro 8
+			warnForPropertyAccess(
+				logger,
+				result.data,
+				'slug',
+				`[content] Attempted to access deprecated property on "${collection}" entry.\nThe "slug" property is no longer automatically added to entries. Please use the "id" property instead.`,
+			);
+			// TODO: remove in Astro 8
+			warnForPropertyAccess(
+				logger,
+				result,
+				'render',
+				`[content] Invalid attempt to access "render()" method on "${collection}" entry.\nTo render an entry, use "render(entry)" from "astro:content".`,
+			);
+			return result;
 		}
 
-		if (!collectionNames.has(collection)) {
-			console.warn(`The collection ${JSON.stringify(collection)} does not exist.`);
-			return undefined;
-		}
-
-		const entryImport = await getEntryImport(collection, lookupId);
-		if (typeof entryImport !== 'function') return undefined;
-
-		const entry = await entryImport();
-
-		if (entry._internal.type === 'content') {
-			return {
-				id: entry.id,
-				slug: entry.slug,
-				body: entry.body,
-				collection: entry.collection,
-				data: entry.data,
-				async render() {
-					return render({
-						collection: entry.collection,
-						id: entry.id,
-						renderEntryImport: await getRenderEntryImport(collection, lookupId),
-					});
-				},
-			};
-		} else if (entry._internal.type === 'data') {
-			return {
-				id: entry.id,
-				collection: entry.collection,
-				data: entry.data,
-			};
-		}
 		return undefined;
 	};
+}
+
+function warnForPropertyAccess(logger: AstroLogger, entry: object, prop: string, message: string) {
+	// Skip if the property is already defined (it may be legitimately defined on the entry)
+	if (!(prop in entry)) {
+		let _value: any = undefined;
+		Object.defineProperty(entry, prop, {
+			get() {
+				// If the user sets value themselves, don't warn
+				if (_value === undefined) {
+					logger.error('content', message);
+				}
+				return _value;
+			},
+			set(v) {
+				_value = v;
+			},
+			enumerable: false,
+		});
+	}
 }
 
 export function createGetEntries(getEntry: ReturnType<typeof createGetEntry>) {
@@ -347,6 +270,188 @@ export function createGetEntries(getEntry: ReturnType<typeof createGetEntry>) {
 		entries: { collection: string; id: string }[] | { collection: string; slug: string }[],
 	) {
 		return Promise.all(entries.map((e) => getEntry(e)));
+	};
+}
+
+export function createGetLiveCollection({
+	liveCollections,
+}: {
+	liveCollections: LiveCollectionConfigMap;
+}) {
+	return async function getLiveCollection(
+		collection: string,
+		filter?: Record<string, unknown>,
+	): Promise<LiveDataCollectionResult> {
+		if (!(collection in liveCollections)) {
+			return {
+				error: new LiveCollectionError(
+					collection,
+					`Collection "${collection}" is not a live collection. Use getCollection() instead of getLiveCollection() to load regular content collections.`,
+				),
+			};
+		}
+
+		try {
+			const context = {
+				filter,
+				collection,
+			};
+
+			const response = await (
+				liveCollections[collection].loader as LiveLoader<any, any, Record<string, unknown>>
+			)?.loadCollection?.(context);
+
+			// Check if loader returned an error
+			if (response && 'error' in response) {
+				return { error: response.error };
+			}
+
+			const { schema } = liveCollections[collection];
+
+			let processedEntries = response.entries;
+			if (schema) {
+				const entryResults = await Promise.all(
+					response.entries.map((entry) => parseLiveEntry(entry, schema, collection)),
+				);
+
+				// Check for parsing errors
+				for (const result of entryResults) {
+					if (result.error) {
+						// Return early on the first error
+						return { error: result.error };
+					}
+				}
+
+				processedEntries = entryResults.map((result) => result.entry!);
+			}
+
+			let cacheHint = response.cacheHint;
+			if (cacheHint) {
+				const cacheHintResult = cacheHintSchema.safeParse(cacheHint);
+
+				if (!cacheHintResult.success) {
+					return {
+						error: new LiveCollectionCacheHintError(collection, undefined, cacheHintResult.error),
+					};
+				}
+				cacheHint = cacheHintResult.data;
+			}
+
+			// Aggregate cache hints from individual entries if any
+			if (processedEntries.length > 0) {
+				const entryTags = new Set<string>();
+				let latestModified: Date | undefined;
+
+				for (const entry of processedEntries) {
+					if (entry.cacheHint) {
+						if (entry.cacheHint.tags) {
+							entry.cacheHint.tags.forEach((tag) => entryTags.add(tag));
+						}
+						if (entry.cacheHint.lastModified instanceof Date) {
+							if (latestModified === undefined || entry.cacheHint.lastModified > latestModified) {
+								latestModified = entry.cacheHint.lastModified;
+							}
+						}
+					}
+				}
+
+				// Merge collection and entry cache hints
+				if (entryTags.size > 0 || latestModified || cacheHint) {
+					const mergedCacheHint: CacheHint = {};
+					if (cacheHint?.tags || entryTags.size > 0) {
+						// Merge and dedupe tags
+						mergedCacheHint.tags = [...new Set([...(cacheHint?.tags || []), ...entryTags])];
+					}
+					if (cacheHint?.lastModified && latestModified) {
+						mergedCacheHint.lastModified =
+							cacheHint.lastModified > latestModified ? cacheHint.lastModified : latestModified;
+					} else if (cacheHint?.lastModified || latestModified) {
+						mergedCacheHint.lastModified = cacheHint?.lastModified ?? latestModified;
+					}
+					cacheHint = mergedCacheHint;
+				}
+			}
+
+			return {
+				entries: processedEntries,
+				cacheHint,
+			};
+		} catch (error) {
+			return {
+				error: new LiveCollectionError(
+					collection,
+					`Unexpected error loading collection ${collection}${error instanceof Error ? `: ${error.message}` : ''}`,
+					error as Error,
+				),
+			};
+		}
+	};
+}
+
+export function createGetLiveEntry({
+	liveCollections,
+}: {
+	liveCollections: LiveCollectionConfigMap;
+}) {
+	return async function getLiveEntry(
+		collection: string,
+		lookup: string | Record<string, unknown>,
+	): Promise<LiveDataEntryResult> {
+		if (!(collection in liveCollections)) {
+			return {
+				error: new LiveCollectionError(
+					collection,
+					`Collection "${collection}" is not a live collection. Use getCollection() instead of getLiveEntry() to load regular content collections.`,
+				),
+			};
+		}
+
+		try {
+			const lookupObject = {
+				filter: typeof lookup === 'string' ? { id: lookup } : lookup,
+				collection,
+			};
+
+			let entry = await (
+				liveCollections[collection].loader as LiveLoader<
+					Record<string, unknown>,
+					Record<string, unknown>
+				>
+			)?.loadEntry?.(lookupObject);
+
+			// Check if loader returned an error
+			if (entry && 'error' in entry) {
+				return { error: entry.error };
+			}
+
+			if (!entry) {
+				return {
+					error: new LiveEntryNotFoundError(collection, lookup),
+				};
+			}
+
+			const { schema } = liveCollections[collection];
+			if (schema) {
+				const result = await parseLiveEntry(entry, schema, collection);
+				if (result.error) {
+					return { error: result.error };
+				}
+				entry = result.entry!;
+			}
+
+			return {
+				entry: entry,
+				cacheHint: entry.cacheHint,
+			};
+		} catch (error) {
+			return {
+				error: new LiveCollectionError(
+					collection,
+					`Unexpected error loading entry ${collection} → ${typeof lookup === 'string' ? lookup : JSON.stringify(lookup)}`,
+					error as Error,
+				),
+			};
+		}
 	};
 }
 
@@ -364,21 +469,40 @@ async function updateImageReferencesInBody(html: string, fileName: string) {
 
 	const imageObjects = new Map<string, GetImageResult>();
 
-	// @ts-expect-error Virtual module resolved at runtime
-	const { getImage } = await import('astro:assets');
+	const { getImage } = await import('virtual:astro:get-image');
 
 	// First load all the images. This is done outside of the replaceAll
 	// function because getImage is async.
 	for (const [_full, imagePath] of html.matchAll(CONTENT_LAYER_IMAGE_REGEX)) {
 		try {
-			const decodedImagePath = JSON.parse(imagePath.replaceAll('&#x22;', '"'));
-			const id = imageSrcToImportId(decodedImagePath.src, fileName);
+			// Markdown processors disagree on which character references to emit when
+			// serialising attribute values: remark uses the numeric forms (`&#x22;` / `&#x27;` / `&#x26;`),
+			// satteri uses the named forms (`&quot;` / `&apos;` / `&amp;`). Decode both styles of
+			// each before JSON.parse, ampersands last — see the same chain in
+			// `vite-plugin-markdown/images.ts` for why the order matters.
+			const decodedImagePath = JSON.parse(
+				imagePath
+					.replace(/&(?:#x22|quot);/g, '"')
+					.replace(/&(?:#x27|apos);/g, "'")
+					.replace(/&(?:amp|#x26|#38);/g, '&'),
+			);
 
-			const imported = imageAssetMap.get(id);
-			if (!id || imageObjects.has(id) || !imported) {
-				continue;
+			let image: GetImageResult;
+			if (URL.canParse(decodedImagePath.src)) {
+				// Remote image, pass through without resolving import
+				// We know we should resolve this remote image because either:
+				// 1. It was collected with the remark-collect-images plugin, which respects the astro image configuration,
+				// 2. OR it was manually injected by another plugin, and we should respect that.
+				image = await getImage(decodedImagePath);
+			} else {
+				const id = imageSrcToImportId(decodedImagePath.src, fileName);
+
+				const imported = imageAssetMap.get(id);
+				if (!id || imageObjects.has(id) || !imported) {
+					continue;
+				}
+				image = await getImage({ ...decodedImagePath, src: imported });
 			}
-			const image: GetImageResult = await getImage({ ...decodedImagePath, src: imported });
 			imageObjects.set(imagePath, image);
 		} catch {
 			throw new Error(`Failed to parse image reference: ${imagePath}`);
@@ -397,74 +521,143 @@ async function updateImageReferencesInBody(html: string, fileName: string) {
 		return Object.entries({
 			...attributes,
 			src: image.src,
-			srcset: image.srcSet.attribute,
+			// An empty `srcset` is invalid HTML, so only emit it when there are
+			// actual candidates. This matches `vite-plugin-markdown/images.ts`.
+			...(image.srcSet.values.length > 0 ? { srcset: image.srcSet.attribute } : {}),
+			// This attribute is used by the toolbar audit
+			...(import.meta.env.DEV ? { 'data-image-component': 'true' } : {}),
 		})
-			.map(([key, value]) => (value ? `${key}=${JSON.stringify(String(value))}` : ''))
+			.filter(([, value]) => value != null)
+			.map(([key, value]) => (value === '' ? `${key}=""` : `${key}="${escape(String(value))}"`))
 			.join(' ');
 	});
 }
 
-function updateImageReferencesInData<T extends Record<string, unknown>>(
+/**
+ * Resolves the image src at `path` within `data` to its `ImageMetadata` (or a
+ * renderable SVG component). Returns the resolved value, or `undefined` when the
+ * image is not in the asset map and the plain src already stored in `data` should
+ * be kept.
+ */
+function resolveImageAtPath(
+	src: string,
+	fileName: string | undefined,
+	imageAssetMap: Map<string, ImageMetadata> | undefined,
+): unknown {
+	const id = imageSrcToImportId(src, fileName);
+	if (!id) {
+		return undefined;
+	}
+	const imported = imageAssetMap?.get(id) as
+		| (ImageMetadata & {
+				__svgData?: {
+					attributes: Record<string, string>;
+					children: string;
+					styles: string[];
+				};
+		  })
+		| undefined;
+	if (!imported) {
+		return undefined;
+	}
+	if (imported.__svgData) {
+		// Reconstruct the renderable SVG component from the data embedded at build
+		// time. We cannot call createSvgComponent inside the SVG Vite module itself
+		// because that would import the server runtime across a dynamic-import
+		// boundary, recreating the TLA circular-dependency deadlock (see #15575).
+		const { __svgData: svgData, ...meta } = imported;
+		return createSvgComponent({ meta: meta as ImageMetadata, ...svgData });
+	}
+	return imported;
+}
+
+/**
+ * Writes `value` at `path` within `target`, copying only the containers along
+ * that path so the shared store entry is never mutated. Sibling values and every
+ * container off the path are shared by reference, so values that `structuredClone`
+ * cannot handle (e.g. `Temporal` objects or class instances from Zod transforms)
+ * are never touched.
+ */
+function setAtPathCopying<T extends Record<string, unknown>>(
+	target: T,
+	path: (string | number)[],
+	value: unknown,
+): T {
+	if (path.length === 0) {
+		return target;
+	}
+	const [key, ...rest] = path;
+	const copy: any = Array.isArray(target) ? target.slice() : { ...target };
+	copy[key] = rest.length === 0 ? value : setAtPathCopying(copy[key], rest, value);
+	return copy;
+}
+
+export function updateImageReferencesInData<T extends Record<string, unknown>>(
 	data: T,
 	fileName?: string,
 	imageAssetMap?: Map<string, ImageMetadata>,
+	imageImports?: (string | number)[][],
 ): T {
-	return new Traverse(data).map(function (ctx, val) {
-		if (typeof val === 'string' && val.startsWith(IMAGE_IMPORT_PREFIX)) {
-			const src = val.replace(IMAGE_IMPORT_PREFIX, '');
-
-			const id = imageSrcToImportId(src, fileName);
-			if (!id) {
-				ctx.update(src);
-				return;
-			}
-			const imported = imageAssetMap?.get(id);
-			if (imported) {
-				ctx.update(imported);
-			} else {
-				ctx.update(src);
-			}
+	if (!imageImports?.length) {
+		return data;
+	}
+	let result = data;
+	for (const path of imageImports) {
+		let src: unknown = result;
+		for (const key of path) {
+			src = (src as Record<string | number, unknown>)?.[key];
 		}
-	});
+		if (typeof src !== 'string') {
+			continue;
+		}
+		const resolved = resolveImageAtPath(src, fileName, imageAssetMap);
+		if (resolved !== undefined) {
+			result = setAtPathCopying(result, path, resolved);
+		}
+	}
+	return result;
 }
 
-export async function renderEntry(
-	entry: DataEntry | { render: () => Promise<{ Content: AstroComponentFactory }> },
-) {
-	if (!entry) {
-		throw new AstroError(AstroErrorData.RenderUndefinedEntryError);
-	}
+export function resolveEntryData<T extends Record<string, unknown>>(
+	entry: DataEntry<T>,
+	imageAssetMap?: Map<string, ImageMetadata>,
+): T {
+	return updateImageReferencesInData(entry.data, entry.filePath, imageAssetMap, entry.imageImports);
+}
 
-	if ('render' in entry) {
-		// This is an old content collection entry, so we use its render method
-		return entry.render();
-	}
-
-	if (entry.deferredRender) {
-		try {
-			// @ts-expect-error	virtual module
-			const { default: contentModules } = await import('astro:content-module-imports');
-			const renderEntryImport = contentModules.get(entry.filePath);
-			return render({
-				collection: '',
-				id: entry.id,
-				renderEntryImport,
-			});
-		} catch (e) {
-			console.error(e);
+export function createRenderEntry({ logger }: { logger: AstroLogger }) {
+	return async function renderEntry(entry: DataEntry) {
+		if (!entry) {
+			throw new AstroError(AstroErrorData.RenderUndefinedEntryError);
 		}
-	}
+		recordContentEntryRender(entry.filePath);
 
-	const html =
-		entry?.rendered?.metadata?.imagePaths?.length && entry.filePath
-			? await updateImageReferencesInBody(entry.rendered.html, entry.filePath)
-			: entry?.rendered?.html;
+		if (entry.deferredRender) {
+			try {
+				// @ts-expect-error	virtual module
+				const { default: contentModules } = await import('astro:content-module-imports');
+				const renderEntryImport = contentModules.get(entry.filePath);
+				return render({
+					collection: '',
+					id: entry.id,
+					renderEntryImport,
+				});
+			} catch (e) {
+				logger.error('content', `${e}`);
+			}
+		}
 
-	const Content = createComponent(() => serverRender`${unescapeHTML(html)}`);
-	return {
-		Content,
-		headings: entry?.rendered?.metadata?.headings ?? [],
-		remarkPluginFrontmatter: entry?.rendered?.metadata?.frontmatter ?? {},
+		const html =
+			entry?.rendered?.metadata?.imagePaths?.length && entry.filePath
+				? await updateImageReferencesInBody(entry.rendered.html, entry.filePath)
+				: entry?.rendered?.html;
+
+		const Content = createComponent(() => serverRender`${unescapeHTML(html)}`);
+		return {
+			Content,
+			headings: entry?.rendered?.metadata?.headings ?? [],
+			remarkPluginFrontmatter: entry?.rendered?.metadata?.frontmatter ?? {},
+		};
 	};
 }
 
@@ -502,9 +695,12 @@ async function render({
 				if (Array.isArray(collectedStyles)) {
 					styles = collectedStyles
 						.map((style: any) => {
+							const content = typeof style === 'string' ? style : style.content;
+							const viteDevId = typeof style === 'object' && style.id ? style.id : undefined;
 							return renderUniqueStylesheet(result, {
 								type: 'inline',
-								content: style,
+								content,
+								viteDevId,
 							});
 						})
 						.join('');
@@ -514,7 +710,7 @@ async function render({
 						.map((link: any) => {
 							return renderUniqueStylesheet(result, {
 								type: 'external',
-								src: prependForwardSlash(link),
+								src: isRemotePath(link) ? link : prependForwardSlash(link),
 							});
 						})
 						.join('');
@@ -562,10 +758,11 @@ async function render({
 	}
 }
 
-export function createReference({ lookupMap }: { lookupMap: ContentLookupMap }) {
+export function createReference() {
 	return function reference(collection: string) {
 		return z
 			.union([
+				z.number().transform((num) => num.toString(10)),
 				z.string(),
 				z.object({
 					id: z.string(),
@@ -576,74 +773,24 @@ export function createReference({ lookupMap }: { lookupMap: ContentLookupMap }) 
 					collection: z.string(),
 				}),
 			])
-			.transform(
-				async (
-					lookup:
-						| string
-						| { id: string; collection: string }
-						| { slug: string; collection: string },
-					ctx,
-				) => {
-					const flattenedErrorPath = ctx.path.join('.');
-					const store = await globalDataStore.get();
-					const collectionIsInStore = store.hasCollection(collection);
+			.transform((lookup, ctx) => {
+				if (typeof lookup === 'object') {
+					// If these don't match then something is wrong with the reference
+					if (lookup.collection !== collection) {
+						const flattenedErrorPath = ctx.issues[0]?.path?.join('.');
 
-					if (typeof lookup === 'object') {
-						// If these don't match then something is wrong with the reference
-						if (lookup.collection !== collection) {
-							ctx.addIssue({
-								code: ZodIssueCode.custom,
-								message: `**${flattenedErrorPath}**: Reference to ${collection} invalid. Expected ${collection}. Received ${lookup.collection}.`,
-							});
-							return;
-						}
-						// We won't throw if the collection is missing, because it may be a content layer collection and the store may not yet be populated.
-						// If it is an object then we're validating later in the build, so we can check the collection at that point.
-
-						return lookup;
-					}
-
-					if (collectionIsInStore) {
-						const entry = store.get(collection, lookup);
-						if (!entry) {
-							ctx.addIssue({
-								code: ZodIssueCode.custom,
-								message: `**${flattenedErrorPath}**: Reference to ${collection} invalid. Entry ${lookup} does not exist.`,
-							});
-							return;
-						}
-						return { id: lookup, collection };
-					}
-					// If the collection is not in the lookup map or store, it may be a content layer collection and the store may not yet be populated.
-					// If the store has 0 or 1 entries it probably means that the entries have not yet been loaded.
-					// The store may have a single entry even if the collections have not loaded, because the top-level metadata collection is generated early.
-					if (!lookupMap[collection] && store.collections().size <= 1) {
-						// For now, we can't validate this reference, so we'll optimistically convert it to a reference object which we'll validate
-						// later in the pipeline when we do have access to the store.
-						return { id: lookup, collection };
-					}
-
-					const { type, entries } = lookupMap[collection];
-					const entry = entries[lookup];
-
-					if (!entry) {
 						ctx.addIssue({
-							code: ZodIssueCode.custom,
-							message: `**${flattenedErrorPath}**: Reference to ${collection} invalid. Expected ${Object.keys(
-								entries,
-							)
-								.map((c) => JSON.stringify(c))
-								.join(' | ')}. Received ${JSON.stringify(lookup)}.`,
+							code: 'custom',
+							message: `**${flattenedErrorPath}**: Reference to ${collection} invalid. Expected ${collection}. Received ${lookup.collection}.`,
 						});
 						return;
 					}
-					// Content is still identified by slugs, so map to a `slug` key for consistency.
-					if (type === 'content') {
-						return { slug: lookup, collection };
-					}
-					return { id: lookup, collection };
-				},
-			);
+					// If it is an object then we're validating later in the build, so we can check the collection at that point.
+					return lookup;
+				}
+
+				return { id: lookup, collection };
+			});
 	};
 }
 
@@ -657,4 +804,42 @@ type PropagatedAssetsModule = {
 
 function isPropagatedAssetsModule(module: any): module is PropagatedAssetsModule {
 	return typeof module === 'object' && module != null && '__astroPropagation' in module;
+}
+
+export function defineCollection(config: any) {
+	if (config.type === 'live') {
+		throw new AstroError({
+			...AstroErrorData.LiveContentConfigError,
+			message: AstroErrorData.LiveContentConfigError.message(
+				'Collections with type `live` must be defined in a `src/live.config.ts` file.',
+			),
+		});
+	}
+	return defineCollectionOrig(config);
+}
+
+export function defineLiveCollection() {
+	throw new AstroError({
+		...AstroErrorData.LiveContentConfigError,
+		message: AstroErrorData.LiveContentConfigError.message(
+			'Live collections must be defined in a `src/live.config.ts` file.',
+		),
+	});
+}
+
+export function createDeprecatedFunction(functionName: string) {
+	return (collection: string) => {
+		const error = new AstroError({
+			...AstroErrorData.GetEntryDeprecationError,
+			message: AstroErrorData.GetEntryDeprecationError.message(collection, functionName),
+		});
+
+		// Remove the runtime module from the stack trace
+		const stackLines = error.stack?.split('\n');
+		if (stackLines && stackLines.length > 1) {
+			stackLines.splice(1, 1);
+			error.stack = stackLines.join('\n');
+		}
+		throw error;
+	};
 }

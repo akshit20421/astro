@@ -1,11 +1,11 @@
 ---
 // Learn about using Astro layouts:
-// https://docs.astro.build/en/core-concepts/layouts/
+// https://docs.astro.build/en/basics/layouts/
 
+import Footer from '../components/Footer.astro';
 // Component Imports
 import MainHead from '../components/MainHead.astro';
 import Nav from '../components/Nav.astro';
-import Footer from '../components/Footer.astro';
 
 interface Props {
 	title?: string | undefined;
@@ -30,7 +30,6 @@ const { title, description } = Astro.props;
 			// Add “loaded” class once the document has completely loaded.
 			addEventListener('load', () => document.documentElement.classList.add('loaded'));
 		</script>
-
 		<style>
 			:root {
 				--_placeholder-bg: linear-gradient(transparent, transparent);

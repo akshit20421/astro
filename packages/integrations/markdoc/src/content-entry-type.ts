@@ -1,19 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parseFrontmatter } from '@astrojs/internal-helpers/frontmatter';
+import { isYAMLParseError } from '@astrojs/internal-helpers/yaml-error';
 import type { Config as MarkdocConfig, Node } from '@markdoc/markdoc';
 import Markdoc from '@markdoc/markdoc';
 import type { AstroConfig, ContentEntryType } from 'astro';
-import { emitESMImage } from 'astro/assets/utils';
-import matter from 'gray-matter';
-import type { Rollup, ErrorPayload as ViteErrorPayload } from 'vite';
+import { emitClientAsset } from 'astro/assets/utils';
+import { emitImageMetadata, markImageReferenced } from 'astro/assets/utils/node';
+import type { Rolldown, ErrorPayload as ViteErrorPayload } from 'vite';
 import type { ComponentConfig } from './config.js';
 import { htmlTokenTransform } from './html/transform/html-token-transform.js';
 import type { MarkdocConfigResult } from './load-config.js';
 import type { MarkdocIntegrationOptions } from './options.js';
 import { setupConfig } from './runtime.js';
 import { getMarkdocTokenizer } from './tokenizer.js';
-import { MarkdocError, isComponentConfig, isValidUrl, prependForwardSlash } from './utils.js';
+import { isComponentConfig, isValidUrl, MarkdocError, prependForwardSlash } from './utils.js';
 
 export async function getContentEntryType({
 	markdocConfigResult,
@@ -26,12 +28,20 @@ export async function getContentEntryType({
 }): Promise<ContentEntryType> {
 	return {
 		extensions: ['.mdoc'],
-		getEntryInfo,
+		getEntryInfo({ fileUrl, contents }) {
+			const parsed = safeParseFrontmatter(contents, fileURLToPath(fileUrl));
+			return {
+				data: parsed.frontmatter,
+				body: parsed.content.trim(),
+				slug: parsed.frontmatter.slug,
+				rawData: parsed.rawFrontmatter,
+			};
+		},
 		handlePropagation: true,
 		async getRenderModule({ contents, fileUrl, viteId }) {
-			const entry = getEntryInfo({ contents, fileUrl });
+			const parsed = safeParseFrontmatter(contents, fileURLToPath(fileUrl));
 			const tokenizer = getMarkdocTokenizer(options);
-			let tokens = tokenizer.tokenize(entry.body);
+			let tokens = tokenizer.tokenize(parsed.content);
 
 			if (options?.allowHTML) {
 				tokens = htmlTokenTransform(tokenizer, tokens);
@@ -47,7 +57,6 @@ export async function getContentEntryType({
 				ast,
 				/* Raised generics issue with Markdoc core https://github.com/markdoc/markdoc/discussions/400 */
 				markdocConfig: markdocConfig as MarkdocConfig,
-				entry,
 				viteId,
 				astroConfig,
 				filePath,
@@ -64,7 +73,6 @@ export async function getContentEntryType({
 					raiseValidationErrors({
 						ast: partialAst,
 						markdocConfig: markdocConfig as MarkdocConfig,
-						entry,
 						viteId,
 						astroConfig,
 						filePath: partialPath,
@@ -92,6 +100,7 @@ export async function getContentEntryType({
 			}
 
 			await emitOptimizedImages(ast.children, {
+				hasDefaultImage: Boolean(markdocConfig.nodes.image),
 				astroConfig,
 				pluginContext,
 				filePath,
@@ -125,7 +134,7 @@ export const Content = createContentComponent(
 	Renderer,
 	stringifiedAst,
 	markdocConfig,
-  options,
+	options,
 	tagComponentMap,
 	nodeComponentMap,
 )`;
@@ -158,7 +167,7 @@ async function resolvePartials({
 	tokenizer: any;
 	allowHTML?: boolean;
 	markdocConfig: MarkdocConfig;
-	pluginContext: Rollup.PluginContext;
+	pluginContext: Rolldown.PluginContext;
 	raisePartialValidationErrors: (ast: Node, filePath: string) => void;
 }) {
 	const relativePartialPath = path.relative(fileURLToPath(root), fileURLToPath(fileUrl));
@@ -224,14 +233,12 @@ async function resolvePartials({
 function raiseValidationErrors({
 	ast,
 	markdocConfig,
-	entry,
 	viteId,
 	astroConfig,
 	filePath,
 }: {
 	ast: Node;
 	markdocConfig: MarkdocConfig;
-	entry: ReturnType<typeof getEntryInfo>;
 	viteId: string;
 	astroConfig: AstroConfig;
 	filePath: string;
@@ -250,8 +257,6 @@ function raiseValidationErrors({
 	});
 
 	if (validationErrors.length) {
-		// Heuristic: take number of newlines for `rawData` and add 2 for the `---` fences
-		const frontmatterBlockOffset = entry.rawData.split('\n').length + 2;
 		const rootRelativePath = path.relative(fileURLToPath(astroConfig.root), filePath);
 		throw new MarkdocError({
 			message: [
@@ -261,7 +266,7 @@ function raiseValidationErrors({
 			location: {
 				// Error overlay does not support multi-line or ranges.
 				// Just point to the first line.
-				line: frontmatterBlockOffset + validationErrors[0].lines[0],
+				line: validationErrors[0].lines[0],
 				file: viteId,
 			},
 		});
@@ -282,16 +287,6 @@ function getUsedTags(markdocAst: Node) {
 	return tags;
 }
 
-function getEntryInfo({ fileUrl, contents }: { fileUrl: URL; contents: string }) {
-	const parsed = parseFrontmatter(contents, fileURLToPath(fileUrl));
-	return {
-		data: parsed.data,
-		body: parsed.content,
-		slug: parsed.data.slug,
-		rawData: parsed.matter,
-	};
-}
-
 /**
  * Emits optimized images, and appends the generated `src` to each AST node
  * via the `__optimizedSrc` attribute.
@@ -299,13 +294,16 @@ function getEntryInfo({ fileUrl, contents }: { fileUrl: URL; contents: string })
 async function emitOptimizedImages(
 	nodeChildren: Node[],
 	ctx: {
-		pluginContext: Rollup.PluginContext;
+		hasDefaultImage: boolean;
+		pluginContext: Rolldown.PluginContext;
 		filePath: string;
 		astroConfig: AstroConfig;
 	},
 ) {
 	for (const node of nodeChildren) {
-		let isComponent = node.type === 'tag' && node.tag === 'image';
+		let isComponent =
+			(node.type === 'tag' && node.tag === 'image') ||
+			(node.type === 'image' && ctx.hasDefaultImage);
 		// Support either a ![]() or {% image %} syntax, and handle the `src` attribute accordingly.
 		if ((node.type === 'image' || isComponent) && typeof node.attributes.src === 'string') {
 			let attributeName = isComponent ? 'src' : '__optimizedSrc';
@@ -317,20 +315,20 @@ async function emitOptimizedImages(
 				const resolved = await ctx.pluginContext.resolve(node.attributes.src, ctx.filePath);
 
 				if (resolved?.id && fs.existsSync(new URL(prependForwardSlash(resolved.id), 'file://'))) {
-					const src = await emitESMImage(
-						resolved.id,
-						ctx.pluginContext.meta.watchMode,
-						ctx.pluginContext.emitFile,
-					);
+					// Only emit files during build, not in dev mode
+					const fileEmitter = ctx.pluginContext.meta.watchMode
+						? undefined
+						: (opts: Parameters<typeof ctx.pluginContext.emitFile>[0]) =>
+								emitClientAsset(ctx.pluginContext, opts);
+					const src = await emitImageMetadata(resolved.id, fileEmitter);
 
 					const fsPath = resolved.id;
 
 					if (src) {
-						// We cannot track images in Markdoc, Markdoc rendering always strips out the proxy. As such, we'll always
+						// We cannot track images in Markdoc, Markdoc rendering always strips out the tracking. As such, we'll always
 						// assume that the image is referenced elsewhere, to be on safer side.
 						if (ctx.astroConfig.output === 'static') {
-							if (globalThis.astroAsset.referencedImages)
-								globalThis.astroAsset.referencedImages.add(fsPath);
+							markImageReferenced(ctx.pluginContext, fsPath);
 						}
 
 						node.attributes[attributeName] = { ...src, fsPath };
@@ -344,7 +342,7 @@ async function emitOptimizedImages(
 				}
 			} else if (isComponent) {
 				// If the user is using the {% image %} tag, always pass the `src` attribute as `__optimizedSrc`, even if it's an external URL or absolute path.
-				// That way, the component can decide whether to optimize it or not.
+				// That way, the component can decide whether or not to optimize it.
 				node.attributes[attributeName] = node.attributes.src;
 			}
 		}
@@ -410,18 +408,21 @@ function getStringifiedMap(
  * Match YAML exception handling from Astro core errors
  * @see 'astro/src/core/errors.ts'
  */
-function parseFrontmatter(fileContents: string, filePath: string) {
+function safeParseFrontmatter(fileContents: string, filePath: string) {
 	try {
-		// `matter` is empty string on cache results
-		// clear cache to prevent this
-		(matter as any).clearCache();
-		return matter(fileContents);
+		// empty with lines to preserve sourcemap location, but not `empty-with-spaces`
+		// because markdoc struggles with spaces
+		return parseFrontmatter(fileContents, { frontmatter: 'empty-with-lines' });
 	} catch (e: any) {
-		if (e.name === 'YAMLException') {
-			const err: Error & ViteErrorPayload['err'] = e;
+		if (isYAMLParseError(e)) {
+			const err = e as Error & ViteErrorPayload['err'];
+			err.stack ??= '';
 			err.id = filePath;
-			err.loc = { file: e.id, line: e.mark.line + 1, column: e.mark.column };
-			err.message = e.reason;
+			const position = e.linePos?.[0];
+			if (position) {
+				err.loc = { file: filePath, line: position.line, column: position.col - 1 };
+			}
+			err.message = e.message;
 			throw err;
 		} else {
 			throw e;

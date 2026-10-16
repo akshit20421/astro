@@ -1,5 +1,51 @@
 # @astrojs/partytown
 
+## 2.1.8
+
+### Patch Changes
+
+- [#17986](https://github.com/withastro/astro/pull/17986) [`b1f9088`](https://github.com/withastro/astro/commit/b1f908874c8e1521abae0cf6945f2980a4d7e005) Thanks [@hanford](https://github.com/hanford)! - Updates `@qwik.dev/partytown` from 0.13.2 to 0.14.4, bringing fixes for analytics event forwarding and iframe loading, support for Google Tag Manager's Tag Assistant preview, and automatic execution of scripts added after client-side navigation.
+
+## 2.1.7
+
+### Patch Changes
+
+- [#16265](https://github.com/withastro/astro/pull/16265) [`7fe40bc`](https://github.com/withastro/astro/commit/7fe40bc7381d981dedad16625d89c00e31cd8fd0) Thanks [@ChrisLaRocque](https://github.com/ChrisLaRocque)! - Updates `@qwik.dev/partytown` to 0.13.2
+
+## 2.1.6
+
+### Patch Changes
+
+- [#16002](https://github.com/withastro/astro/pull/16002) [`846f27f`](https://github.com/withastro/astro/commit/846f27f4be8508f728d237e93fcac7c6ec8227b2) Thanks [@buley](https://github.com/buley)! - Fixes file descriptor leaks from read streams that were not destroyed on client disconnect or read errors
+
+## 2.1.5
+
+### Patch Changes
+
+- [#15820](https://github.com/withastro/astro/pull/15820) [`e20474b`](https://github.com/withastro/astro/commit/e20474b98c6d868ed9734f7eeb7564bffe8bfd77) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Fixes broken publish
+
+## 2.1.4
+
+### Patch Changes
+
+- [#13109](https://github.com/withastro/astro/pull/13109) [`5c0e0ea`](https://github.com/withastro/astro/commit/5c0e0eaa908bbfd6705eb950713c26c9ee0bd32d) Thanks [@arnottferels](https://github.com/arnottferels)! - Adds support for `config.lib`, which allows changing the destination of the files:
+
+  ```diff
+  export default defineConfig({
+  	integrations: [partytown({
+  		config: {
+  +			lib: '/assets/lib/~partytown/';
+  		}
+  	})]
+  })
+  ```
+
+## 2.1.3
+
+### Patch Changes
+
+- [#12822](https://github.com/withastro/astro/pull/12822) [`1fab2f2`](https://github.com/withastro/astro/commit/1fab2f2ef671cc265c8dd46c5858915f971f2478) Thanks [@stdavis](https://github.com/stdavis)! - Updates the partytown dependency to the new npm org name and latest version.
+
 ## 2.1.2
 
 ### Patch Changes

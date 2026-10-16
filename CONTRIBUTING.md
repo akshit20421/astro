@@ -11,8 +11,8 @@ We welcome contributions of any size and skill level. As an open source project,
 ### Prerequisites
 
 ```shell
-node: "^>=18.17.1"
-pnpm: "^9.12.1"
+node: "^>=22.22.0"
+pnpm: "^10.28.0"
 # otherwise, your build will fail
 ```
 
@@ -77,6 +77,42 @@ During the development process, you may want to test your changes to ensure they
 
 Overall, it's up to personal preference which method to use. For smaller changes, using the examples folder may be sufficient. For larger changes, using a separate project may be more appropriate.
 
+**How can I test changes to `@astrojs/compiler` (or other dependencies) locally?**
+
+If you're working on a dependency like `@astrojs/compiler` and want to test your changes against the Astro repo, you can use [`pnpm.overrides`](https://pnpm.io/package_json#pnpmoverrides) in the root `package.json` to point to your local build:
+
+```json
+{
+  "pnpm": {
+    "overrides": {
+      "@astrojs/compiler": "file:../astro-compiler/packages/compiler"
+    }
+  }
+}
+```
+
+After adding the override, run `pnpm install` to link the local package. Make sure to build the dependency first so the `dist/` folder is up to date. Remove the override before committing.
+
+#### Contributing to language tooling
+
+For information on contributing to the language tooling (VS Code extension, language server, etc.), see [packages/language-tools/CONTRIBUTING.md](./packages/language-tools/CONTRIBUTING.md).
+
+#### Naming convention and APIs usage
+
+> [!NOTE]
+> This is a requirement that is applied only to the `packages/astro` source code.
+
+> [!IMPORTANT]
+> This convention is recent, the source code might not follow this convention yet.
+
+The use of `Node.js` APIs e.g. `node:` is limited and should be done only in specific parts of the code. The reason why
+the project can't use `Node.js` APIs at will is because Astro code might run in environments that support runtimes other than
+Node.js. An example is Cloudflare Workers.
+
+Code that is runtime-agnostic (i.e. code that shouldn't use Node.js APIs) should be placed inside folders or files called `runtime` (`runtime/` or `runtime.ts`).
+
+You can use `Node.js` APIs inside the implementation of the vite plugins, but if the vite plugin returns a virtual module, that virtual module can't use Node.js APIs.
+
 #### Debugging Vite
 
 You can debug vite by prefixing any command with `DEBUG` like so:
@@ -96,7 +132,7 @@ pnpm run test
 pnpm run test:match "$STRING_MATCH"
 # run tests on another package
 # (example - `pnpm --filter @astrojs/rss run test` runs `packages/astro-rss/test/rss.test.js`)
-pnpm --filter $STRING_MATCH run test
+pnpm --filter "$STRING_MATCH" run test
 ```
 
 Most tests use [`mocha`](https://mochajs.org) as the test runner. We're slowly migrating to use [`node:test`](https://nodejs.org/api/test.html) instead through the custom [`astro-scripts test`](./scripts/cmd/test.js) command. For packages that use `node:test`, you can run these commands in their directories:
@@ -145,7 +181,7 @@ node --test --test-only test/astro-basic.test.js
 
 #### Debugging tests in CI
 
-There might be occasions where some tests fail in certain CI runs due to some timeout issue. If this happens, it will be very difficult to understand which file cause the timeout. That's caused by come quirks of the Node.js test runner combined with our architecture.
+There might be occasions where some tests fail in certain CI runs due to some timeout issue. If this happens, it will be very difficult to understand which file cause the timeout. That's caused by some quirks of the Node.js test runner combined with our architecture.
 
 To understand which file causes the issue, you can modify the `test` script inside the `package.json` by adding the `--parallel` option:
 
@@ -156,7 +192,7 @@ To understand which file causes the issue, you can modify the `test` script insi
 }
 ```
 
-Save the change and **push it** to your PR. This change will make the test CI slower, but it will allow to see which files causes the timeout. Once you fixed the issue **revert the change and push it**.
+Save the change and **push it** to your PR. This change will make the test CI slower, but it will allow you to see which files cause the timeout. Once you fixed the issue **revert the change and push it**.
 
 #### E2E tests
 
@@ -174,13 +210,24 @@ pnpm run test:e2e:match "$STRING_MATCH"
 
 Any tests for `astro build` output should use the main `mocha` tests rather than E2E - these tests will run faster than having Playwright start the `astro preview` server.
 
-If a test needs to validate what happens on the page after it's loading in the browser, that's a perfect use for E2E dev server tests, i.e. to verify that hot-module reloading works in `astro dev` or that components were client hydrated and are interactive.
+If a test needs to validate what happens on the page after it's loaded in the browser, that's a perfect use for E2E dev server tests, i.e. to verify that hot-module reloading works in `astro dev` or that components were client hydrated and are interactive.
 
 #### Creating tests
 
 When creating new tests, it's best to reference other existing test files and replicate the same setup. Some other tips include:
 
 - When re-using a fixture multiple times with different configurations, you should also configure unique `outDir`, `build.client`, and `build.server` values so the build output runtime isn't cached and shared by ESM between test runs.
+
+> [!IMPORTANT]
+> If tests start to fail for no apparent reason, the first thing to look at the `outDir` configuration. As build caches artifacts between runs, different tests might end up sharing some of the emitted modules.
+> To avoid this possible overlap, **make sure to add a custom `outDir` to your test case**.
+>
+> ```js
+> await loadFixture({
+>   root: './fixtures/some-fixture',
+>   outDir: './dist/some-folder',
+> });
+> ```
 
 ### Other useful commands
 
@@ -228,26 +275,27 @@ To run only a specific benchmark on CI, add its name after the command in your c
 
 ## For maintainers
 
-This paragraph provides some guidance to the maintainers of the monorepo. The guidelines explained here aren't necessarily followed by other repositories of the same GitHub organisation.
+This paragraph provides some guidance to the maintainers of the monorepo. The guidelines explained here aren't necessarily followed by other repositories of the GitHub organisation.
 
 ### Issue triaging workflow
 
 ```mermaid
 graph TD;
-    start{Followed issue\ntemplate?}
-    start --NO--> close1[Close and ask to\nfollow template]
+    start{Followed issue <br/> template?}
+    start --NO--> close1[Close and ask to <br/> follow template.]
     start --YES--> dupe{Is duplicate?}
-    dupe --YES--> close2[Close and point\nto duplicate]
-    dupe --NO--> repro{Has proper\nreproduction?}
-    repro --NO--> close3[Label: 'needs reproduction'\nbot will auto close if no update\nhas been made in 3 days]
+    dupe --YES--> close2[Close and point <br/> to duplicate.]
+    dupe --NO--> repro{Has proper <br/> reproduction?}
+    repro --NO--> close3[Add&nbsp;label:&nbsp;'needs&nbsp;repro'. <br/> Bot will auto close if no <br/>update was made in 3 days.]
     repro --YES--> real{Is actually a bug?}
     real --NO--> maybefeat{Is it a feature request?}
-    maybefeat -- YES --> roadmap[Close the issue.\n Point user to the roadmap.]
-    maybefeat -- NO --> intended{Is the intended\nbehaviour?}
-    intended --YES--> explain[Explain and close\npoint to docs if needed]
-    intended --NO--> open[Add label 'needs discussion'\nRemove 'needs triage' label]
-    real --YES--> real2["1. Remove 'needs triage' label\n2. Add related feature label if\napplicable (e.g. 'feat: ssr')\n3. Add priority and meta labels (see below)"]
-    real2 --> tolabel[Use the framework below to decide the priority of the issue,\nand choose the correct label]
+    maybefeat -- YES --> roadmap[Close the issue. <br/> Point user to the roadmap.]
+    maybefeat -- NO --> intended{Is the intended <br/> behaviour?}
+    intended --YES--> explain[Explain and close. <br/> Point to docs if needed.]
+    intended --NO--> open[Add&nbsp;label:&nbsp;'needs&nbsp;discussion'.<br/>Remove&nbsp;label:&nbsp;'needs&nbsp;triage'.]
+    real --YES--> real2["∙&nbsp;Remove&nbsp;label:&nbsp;'needs&nbsp;triage'. <br/> ∙ Add related feature label if <br/> applicable. (e.g. 'feat: ssr') <br/> ∙ Add priority and meta labels. (see below)"]
+    style real2 text-wrap:balance
+    real2 --> tolabel[Use the framework below <br/> to decide the priority <br/> of the issue and choose <br/> the correct label.]
 
 ```
 
@@ -258,7 +306,6 @@ The Astro project has five levels of priority to issues, where `p5` is the highe
 - `p5`: the bug impacts the majority of Astro projects, it doesn't have a workaround and makes Astro unusable/unstable.
 
   Some examples:
-
   - the dev server crashes;
   - the build breaks and doesn't complete;
   - huge regressions in terms of performance;
@@ -270,7 +317,7 @@ The Astro project has five levels of priority to issues, where `p5` is the highe
 - `p4`: the bug impacts _many_ Astro projects, it doesn't have a workaround but Astro is still stable/usable.
 - `p3`: any bug that doesn't fall in the `p4` or `p5` category. If the documentation doesn't cover
   the case reported by the user, it's useful to initiate a discussion via the `"needs discussion"` label. Seek opinions from OP and other maintainers.
-- `p2`: all the bugs that have workarounds.
+- `p2`: all bugs that have workarounds.
 - `p1`: very minor bug, that impacts a small amount of users. Sometimes it's an edge case and it's easy to fix. Very useful if you want to assign the fix to a first-time contributor.
 
 > [!IMPORTANT]
@@ -281,7 +328,64 @@ Assigning labels isn't always easy and many times the distinction between the di
 - When assigning a `p2`, **always** add a comment that explains the workaround. If a workaround isn't provided, ping the person that assigned the label and ask them to provide one.
 - Astro has **many** features, but there are some that have a larger impact than others: development server, build command, HMR (TBD, we don't have a page that explains expectations of HMR in Astro), **evident** regressions in performance.
 - In case the number of reactions of an issue grows, the number of users affected grows, or a discussion uncovers some insights that weren't clear before, it's OK to change the priority of the issue. The maintainer **should** provide an explanation when assigning a different label.
-  As with any other contribution, triaging is voluntary and best-efforts. We welcome and appreciate all the help you're happy to give (including reading this!) and nothing more. If you are not confident about an issue, you are welcome to leave an issue untriaged for someone who would have more context, or to bring it to their attention.
+  As with any other contribution, triaging is voluntary and best-effort. We welcome and appreciate all the help you're happy to give (including reading this!) and nothing more. If you are not confident about an issue, you are welcome to leave an issue untriaged for someone who would have more context, or to bring it to their attention.
+
+### Preview releases
+
+You can trigger a preview release **from a PR** anytime by using the label `pr preview`. Add this label, and a workflow will trigger, which at the end will add a comment with the instructions of how to install the preview release. A preview release will be created for each package that has a pending changeset.
+
+If you're in need to trigger multiple preview releases from the same PR, remove the label and add it again.
+
+## TypeScript project references
+
+The repo uses [TypeScript project references](https://www.typescriptlang.org/docs/handbook/project-references.html) so `tsc -b` only rebuilds projects that have actually changed (and their dependents). It also lets the editor "Go to Definition" jump straight to source across package boundaries, even before `pnpm build`.
+
+Run `pnpm typecheck` (which runs `tsc -b`) to incrementally typecheck. Use `pnpm typecheck --clean` to clear the build cache.
+
+### Shared configs
+
+Shared configs live under `configs/` at the repo root:
+
+- `configs/tsconfig.base.json`: base config that every other tsconfig extends from.
+- `configs/tsconfig.build.json`: builds packages. Includes `src/` and emits declarations to `dist/`.
+- `configs/tsconfig.test.json`: typechecks tests. Includes `test/`, excludes `test/fixtures/`.
+- `configs/tsconfig.language-tools.json`: variant for `packages/language-tools/` packages (targets commonjs).
+
+### Per-package layout
+
+The typical package has three tsconfig files:
+
+```jsonc
+// packages/<pkg>/tsconfig.build.json
+// Extends the shared build config. `references` declares workspace dependencies
+// and should mirror the deps in package.json (maintained manually for now).
+{
+  "extends": "../../configs/tsconfig.build.json",
+  "references": [{ "path": "../dep1/tsconfig.json" }, { "path": "../dep2/tsconfig.json" }],
+}
+```
+
+```jsonc
+// packages/<pkg>/tsconfig.test.json
+// References the package's own build so dist/ is built before tests typecheck.
+{
+  "extends": "../../configs/tsconfig.test.json",
+  "references": [{ "path": "./tsconfig.build.json" }],
+}
+```
+
+```jsonc
+// packages/<pkg>/tsconfig.json
+// Pure solution file. `"files": []` means it includes no sources of its own.
+// It only acts as the entry point that points at build + test.
+{
+  "extends": "../../configs/tsconfig.base.json",
+  "files": [],
+  "references": [{ "path": "./tsconfig.build.json" }, { "path": "./tsconfig.test.json" }],
+}
+```
+
+The repo-root `tsconfig.json` is the top-level solution file referencing every package. When adding a new package, add it to the root `references` list and wire its `tsconfig.build.json` `references` to match its workspace dependencies.
 
 ## Code Structure
 
@@ -289,13 +393,53 @@ Server-side rendering (SSR) can be complicated. The Astro package (`packages/ast
 
 - `components/`: Built-in components to use in your project (e.g. `import Code from 'astro/components/Code.astro'`)
 - `src/`: Astro source
-  - `@types/`: TypeScript types. These are centralized to cut down on circular dependencies
+  - `types/`: TypeScript types. These are centralized to cut down on circular dependencies
   - `cli/`: Code that powers the `astro` CLI command
   - `core/`: Code that executes **in the top-level scope** (in Node). Within, you’ll find code that powers the `astro build` and `astro dev` commands, as well as top-level SSR code.
   - `runtime/`: Code that executes **in different scopes** (i.e. not in a pure Node context). You’ll have to think about code differently here.
     - `client/`: Code that executes **in the browser.** Astro’s partial hydration code lives here, and only browser-compatible code can be used.
     - `server/`: Code that executes **inside Vite’s SSR.** Though this is a Node environment inside, this will be executed independently of `core/` and may have to be structured differently.
   - `vite-plugin-*/`: Any Vite plugins that Astro needs to run. For the most part, these also execute within Vite similar to `src/runtime/server/`, but it’s also helpful to think about them as independent modules. _Note: at the moment these are internal while they’re in development_
+
+### Public vs. internal API
+
+`packages/astro/package.json` declares two export maps:
+
+- `"exports"` — the monorepo view. Includes public entries plus `./_internal/*` subpaths for use by other workspace packages.
+- `"publishConfig.exports"` — the npm view. [pnpm replaces `"exports"` with this at publish time](https://pnpm.io/package_json#publishconfig), so `_internal/*` entries never ship.
+
+Other workspace packages should import internals via the subpath, not a deep relative path:
+
+```ts
+// Do this
+import { loadFixture } from 'astro/_internal/test/test-utils';
+// Not this
+import { loadFixture } from '../../../astro/test/test-utils.js';
+```
+
+**Example — public export `./foo`** (add to _both_ maps):
+
+```diff
+ "exports": {
++    "./foo": "./dist/foo.js",
+ },
+ "publishConfig": {
+   "exports": {
++    "./foo": "./dist/foo.js",
+   }
+ }
+```
+
+**Example — internal export `./_internal/foo`** (add to `"exports"` only):
+
+```diff
+ "exports": {
++    "./_internal/foo": "./dist/foo.js",
+ }
+ // publishConfig.exports unchanged
+```
+
+`packages/astro/test/exports.test.ts` will fail if the two maps drift out of sync (after stripping `./_internal/*` keys).
 
 ### Thinking about SSR
 
@@ -306,6 +450,198 @@ There are 3 contexts in which code executes:
 - **In the browser**: this code lives in `src/runtime/client/`.
 
 Understanding in which environment code runs, and at which stage in the process, can help clarify thinking about what Astro is doing. It also helps with debugging, for instance, if you’re working within `src/core/`, you know that your code isn’t executing within Vite, so you don’t have to debug Vite’s setup. But you will have to debug vite inside `runtime/server/`.
+
+### Deep Dives
+
+The `reference/` directory contains detailed reference docs on specific subsystems:
+
+- [`reference/optimize-deps.md`](./reference/optimize-deps.md) — Vite dep optimizer debugging playbook
+- [`reference/handlers.md`](./reference/handlers.md) — Handler pipeline, `PipelineFeatures`, and how to add feature checks for `src/app.ts`
+
+### Making code testable
+
+To make it easier to test code, try decoupling **business logic** from **infrastructure**:
+
+- **Infrastructure** is code that depends on external systems and/or requires a special environment to run. For example: DB calls, file system, randomness etc...
+- **Business logic** (or _core logic_ or _domain_) is the rest. It's pure logic that's easy to run from anywhere.
+
+That means avoiding side-effects by making external dependencies explicit. This often means passing more things as arguments.
+
+In practice, that can take several shapes. Let's have a look at an example:
+
+```ts
+// create-key.ts
+import { logger, generateKey } from '../utils.js';
+import { encodeBase64 } from '@oslojs/encoding';
+
+export async function createKey() {
+  const encoded = encodeBase64(
+    new Uint8Array(await crypto.subtle.exportKey('raw', await generateKey())),
+  );
+  logger.info(`Key created: ${key}`);
+}
+
+// main.ts
+import { createKey } from './create-key.js';
+
+async function main() {
+  await createKey();
+}
+```
+
+This function is very hard to test because it depends on:
+
+- A global logger
+- The `crypto` global
+- The `@oslojs/encoding` package
+- A `generateKey` utility function
+
+One way to refactor this function is to move many of these things to arguments:
+
+```ts
+// create-key.ts
+import type { Logger } from '../types.js';
+
+interface Options {
+  generateKey: () => Promise<void>;
+  logger: Logger;
+}
+
+export async function createKey({ generateKey, logger }: Options) {
+  const key = await generateKey();
+  logger.info(`Key created: ${key}`);
+}
+
+// main.ts
+import { createKey } from './create-key.js';
+import { logger, generateKey } from '../utils.js';
+import { encodeBase64 } from '@oslojs/encoding';
+
+async function main() {
+  await createKey({
+    logger,
+    async generateKey() {
+      return encodeBase64(
+        new Uint8Array(await crypto.subtle.exportKey('raw', await generateKey())),
+      );
+    },
+  });
+}
+```
+
+We could take this further by writing some custom abstractions, which can be useful when some of this logic needs to shared:
+
+```ts
+// types.ts
+export interface KeyGenerator {
+  generate: () => Promise<string>;
+}
+
+// create-key.ts
+import type { KeyGenerator, Logger } from './types.js';
+
+interface Options {
+  keyGenerator: KeyGenerator;
+  logger: Logger;
+}
+
+export async function createKey({ keyGenerator, logger }: Options) {
+  const key = await keyGenerator.generate();
+  logger.info(`Key created: ${key}`);
+}
+
+// crypto-key-generator.ts
+import type { KeyGenerator } from './types.js';
+import { encodeBase64 } from '@oslojs/encoding';
+
+export class CryptoKeyGenerator implements KeyGenerator {
+  readonly #algorithm = 'AES-GCM';
+
+  async generate(): Promise<string> {
+    const key = await crypto.subtle.generateKey(
+      {
+        name: this.#algorithm,
+        length: 256,
+      },
+      true,
+      ['encrypt', 'decrypt'],
+    );
+    const encoded = encodeBase64(new Uint8Array(await crypto.subtle.exportKey('raw', key)));
+    return encoded;
+  }
+}
+
+// main.ts
+import { logger } from './utils.js';
+import { createKey } from './create-key.js';
+import { CryptoKeyGenerator } from '../crypto-key-generator.js';
+
+const keyGenerator = new CryptoKeyGenerator();
+
+async function main() {
+  await createKey({ logger, keyGenerator });
+}
+```
+
+The power of this structure is that it makes it easy to unit test. Because abstractions hold very specific responsibilities, we can easily mock them:
+
+```js
+// @ts-check
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { createKey } from '../../../dist/cli/create-key/core/create-key.js';
+import { SpyLogger } from '../test-utils.js';
+import { FakeKeyGenerator } from './utils.js';
+
+describe('CLI create-key', () => {
+  describe('core', () => {
+    describe('createKey()', () => {
+      it('logs the generated key', async () => {
+        const logger = new SpyLogger();
+        const keyGenerator = new FakeKeyGenerator('FOO');
+
+        await createKey({ logger, keyGenerator });
+
+        assert.equal(logger.logs[0].type, 'info');
+        assert.equal(logger.logs[0].label, 'crypto');
+        assert.match(logger.logs[0].message, /ASTRO_KEY=FOO/);
+      });
+    });
+  });
+});
+```
+
+It can be useful to create test specific abstractions:
+
+```js
+// @ts-check
+
+/**
+ * @import { KeyGenerator } from "../../../dist/cli/create-key/definitions.js"
+ */
+
+/** @implements {KeyGenerator} */
+export class FakeKeyGenerator {
+  /** @type {string} */
+  #key;
+
+  /**
+   * @param {string} key
+   */
+  constructor(key) {
+    this.#key = key;
+  }
+
+  async generate() {
+    return this.#key;
+  }
+}
+```
+
+Remember:
+
+- Try test all implementations. If an infrastructure implementation is just a wrapper around a NPM package, you may not need to test it and instead trust the package own tests
+- Always test business logic
 
 ## Branches
 
@@ -329,7 +665,7 @@ By default, `create-astro` and [astro.new](https://astro.new) point to this bran
 
 The repo is set up with automatic releases, using the changeset GitHub action & bot.
 
-To release a new version of Astro, find the `Version Packages` PR, read it over, and merge it.
+To release a new version of Astro, find the `[ci] release` PR, read it over, and merge it.
 
 ### Releasing PR preview snapshots
 
@@ -369,20 +705,22 @@ Full documentation: https://github.com/changesets/changesets/blob/main/docs/prer
 
 ### Entering prerelease mode
 
-If you have gotten permission from the core contributors, you can enter into prerelease mode by following the following steps:
+If you have gotten permission from the core contributors, you can enter into prerelease mode with the following steps:
 
 - Run: `pnpm exec changeset pre enter next` in the project root
+- Update `.changeset/config.json` with `"baseBranch": "next"` (for easier changesets creation)
 - Create a new PR from the changes created by this command
-- Review, approve, and more the PR to enter prerelease mode.
+- Review, approve, and merge the PR to enter prerelease mode.
 - If successful, The "[ci] release" PR (if one exists) will now say "[ci] release (next)".
 
 ### Exiting prerelease mode
 
-Exiting prerelease mode should happen once an experimental release is ready to go from `npm install astro@next` to `npm install astro`. Only a core contributor run these steps. These steps should be run before
+Exiting prerelease mode should happen once an experimental release is ready to go from `npm install astro@next` to `npm install astro`. Only a core contributor can run these steps:
 
 - Run: `pnpm exec changeset pre exit` in the project root
+- Update `.changeset/config.json` with `"baseBranch": "main"`
 - Create a new PR from the changes created by this command.
-- Review, approve, and more the PR to enter prerelease mode.
+- Review, approve, and merge the PR to enter prerelease mode.
 - If successful, The "[ci] release (next)" PR (if one exists) will now say "[ci] release".
 
 ### Releasing `astro@latest` while in prerelease mode

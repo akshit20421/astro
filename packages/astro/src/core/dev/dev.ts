@@ -1,28 +1,33 @@
-import fs, { existsSync } from 'node:fs';
+import fs from 'node:fs';
 import type http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { performance } from 'node:perf_hooks';
-import { green } from 'kleur/colors';
-import { gt, major, minor, patch } from 'semver';
+import colors from 'piccolore';
+import { getMajor, getMinor, getPatch, isGreaterThan } from 'verkit';
 import type * as vite from 'vite';
-import type { AstroInlineConfig } from '../../@types/astro.js';
-import { getDataStoreFile, globalContentLayer } from '../../content/content-layer.js';
-import { attachContentServerListeners } from '../../content/index.js';
+import { getDataStoreChunkSize, getDataStoreDir, getDataStoreFile } from '../../content/paths.js';
+import { globalContentLayer } from '../../content/instance.js';
+import { attachContentServerListeners, attachDataStoreInvalidation } from '../../content/index.js';
 import { MutableDataStore } from '../../content/mutable-data-store.js';
 import { globalContentConfigObserver } from '../../content/utils.js';
 import { telemetry } from '../../events/index.js';
-import * as msg from '../messages.js';
+import type { AstroInlineConfig } from '../../types/public/config.js';
+import * as msg from '../messages/runtime.js';
+import { newVersionAvailable } from '../messages/node.js';
 import { ensureProcessNodeEnv } from '../util.js';
 import { startContainer } from './container.js';
 import { createContainerWithAutomaticRestart } from './restart.js';
 import {
-	MAX_PATCH_DISTANCE,
 	fetchLatestAstroVersion,
+	MAX_PATCH_DISTANCE,
 	shouldCheckForUpdates,
 } from './update-check.js';
+import { BuildTimeAstroVersionProvider } from '../../cli/infra/build-time-astro-version-provider.js';
+import { piccoloreTextStyler } from '../../cli/infra/piccolore-text-styler.js';
 
 export interface DevServer {
 	address: AddressInfo;
+	resolvedUrls: vite.ResolvedServerUrls;
 	handle: (req: http.IncomingMessage, res: http.ServerResponse<http.IncomingMessage>) => void;
 	watcher: vite.FSWatcher;
 	stop(): Promise<void>;
@@ -54,14 +59,14 @@ export default async function dev(inlineConfig: AstroInlineConfig): Promise<DevS
 					if (shouldCheck) {
 						const version = await fetchLatestAstroVersion(restart.container.settings.preferences);
 
-						if (gt(version, currentVersion)) {
+						if (isGreaterThan(version, currentVersion)) {
 							// Only update the latestAstroVersion if the latest version is greater than the current version, that way we don't need to check that again
 							// whenever we check for the latest version elsewhere
 							restart.container.settings.latestAstroVersion = version;
 
-							const sameMajor = major(version) === major(currentVersion);
-							const sameMinor = minor(version) === minor(currentVersion);
-							const patchDistance = patch(version) - patch(currentVersion);
+							const sameMajor = getMajor(version) === getMajor(currentVersion);
+							const sameMinor = getMinor(version) === getMinor(currentVersion);
+							const patchDistance = getPatch(version) - getPatch(currentVersion);
 
 							if (sameMajor && sameMinor && patchDistance < MAX_PATCH_DISTANCE) {
 								// Don't bother the user with a log if they're only a few patch versions behind
@@ -71,7 +76,7 @@ export default async function dev(inlineConfig: AstroInlineConfig): Promise<DevS
 
 							logger.warn(
 								'SKIP_FORMAT',
-								await msg.newVersionAvailable({
+								await newVersionAvailable({
 									latestVersion: version,
 								}),
 							);
@@ -84,8 +89,51 @@ export default async function dev(inlineConfig: AstroInlineConfig): Promise<DevS
 		}
 	}
 
+	let store: MutableDataStore | undefined;
+	try {
+		const chunkSize = getDataStoreChunkSize(restart.container.settings);
+		if (chunkSize !== undefined) {
+			const dataStoreDir = getDataStoreDir(restart.container.settings, true);
+			store = await MutableDataStore.fromDir(dataStoreDir, chunkSize, logger);
+		} else {
+			const dataStoreFile = getDataStoreFile(restart.container.settings, true);
+			store = await MutableDataStore.fromFile(dataStoreFile);
+		}
+	} catch (err: any) {
+		logger.error('content', err.message);
+	}
+
+	if (!store) {
+		logger.error('content', 'Failed to create data store');
+	} else {
+		// Invalidate the content virtual modules directly when the store is
+		// written, rather than relying on the file watcher to observe the write.
+		// On Windows the watcher can miss it, leaving dev serving stale content.
+		attachDataStoreInvalidation(store, restart.container.viteServer, restart.container.settings);
+	}
+	await attachContentServerListeners(restart.container);
+
+	const config = globalContentConfigObserver.get();
+	if (config.status === 'error') {
+		logger.error('content', config.error.message);
+	}
+	if (config.status === 'loaded' && store) {
+		const contentLayer = globalContentLayer.init({
+			settings: restart.container.settings,
+			logger,
+			watcher: restart.container.viteServer.watcher,
+			store,
+		});
+		contentLayer.watchContentConfig();
+		await contentLayer.sync();
+	} else if (config.status !== 'does-not-exist') {
+		logger.warn('content', 'Content config not loaded');
+	}
+
 	// Start listening to the port
 	const devServerAddressInfo = await startContainer(restart.container);
+
+	restart.bindCLIShortcuts();
 	logger.info(
 		'SKIP_FORMAT',
 		msg.serverStart({
@@ -93,6 +141,8 @@ export default async function dev(inlineConfig: AstroInlineConfig): Promise<DevS
 			resolvedUrls: restart.container.viteServer.resolvedUrls || { local: [], network: [] },
 			host: restart.container.settings.config.server.host,
 			base: restart.container.settings.config.base,
+			astroVersionProvider: new BuildTimeAstroVersionProvider(),
+			textStyler: piccoloreTextStyler,
 		}),
 	);
 
@@ -103,40 +153,13 @@ export default async function dev(inlineConfig: AstroInlineConfig): Promise<DevS
 		logger.warn('SKIP_FORMAT', msg.fsStrictWarning());
 	}
 
-	await attachContentServerListeners(restart.container);
-
-	let store: MutableDataStore | undefined;
-	try {
-		const dataStoreFile = getDataStoreFile(restart.container.settings);
-		if (existsSync(dataStoreFile)) {
-			store = await MutableDataStore.fromFile(dataStoreFile);
-		}
-	} catch (err: any) {
-		logger.error('content', err.message);
-	}
-	if (!store) {
-		store = new MutableDataStore();
-	}
-
-	const config = globalContentConfigObserver.get();
-	if (config.status === 'error') {
-		logger.error('content', config.error.message);
-	}
-	if (config.status === 'loaded') {
-		const contentLayer = globalContentLayer.init({
-			settings: restart.container.settings,
-			logger,
-			watcher: restart.container.viteServer.watcher,
-			store,
-		});
-		contentLayer.watchContentConfig();
-		await contentLayer.sync();
-	}
-
-	logger.info(null, green('watching for file changes...'));
+	logger.info(null, colors.green('watching for file changes...'));
 
 	return {
 		address: devServerAddressInfo,
+		get resolvedUrls() {
+			return restart.container.viteServer.resolvedUrls || { local: [], network: [] };
+		},
 		get watcher() {
 			return restart.container.viteServer.watcher;
 		},

@@ -1,25 +1,29 @@
 import fs, { readFileSync } from 'node:fs';
 import { basename } from 'node:path/posix';
-import { dim, green } from 'kleur/colors';
-import type PQueue from 'p-queue';
-import type { AstroConfig } from '../../@types/astro.js';
-import { getOutDirWithinCwd } from '../../core/build/common.js';
-import type { BuildPipeline } from '../../core/build/pipeline.js';
+import { recordTiming } from '@astrojs/internal-helpers/timings';
+import colors from 'piccolore';
+import type { StaticBuildOptions } from '../../core/build/types.js';
 import { getTimeStat } from '../../core/build/util.js';
 import { AstroError } from '../../core/errors/errors.js';
+import { copyCachedFile } from '../../core/fs/index.js';
 import { AstroErrorData } from '../../core/errors/index.js';
-import type { Logger } from '../../core/logger/core.js';
+import { astroToRuntimeLogger, type AstroLogger } from '../../core/logger/core.js';
 import { isRemotePath, removeLeadingForwardSlash } from '../../core/path.js';
-import { isServerLikeOutput } from '../../core/util.js';
 import type { MapValue } from '../../type-utils.js';
-import { getConfiguredImageService } from '../internal.js';
-import type { LocalImageService } from '../services/service.js';
-import type { AssetsGlobalStaticImagesList, ImageMetadata, ImageTransform } from '../types.js';
+import type { AstroConfig } from '../../types/public/config.js';
+import type { ImageConfig, LocalImageService } from '../services/service.js';
+import type {
+	AssetsGlobalStaticImagesList,
+	ImageMetadata,
+	ImageTransform,
+	SerializedStaticImage,
+} from '../types.js';
 import { isESMImportedImage } from '../utils/imageKind.js';
-import { type RemoteCacheEntry, loadRemoteImage } from './remote.js';
+import { getImageServiceConfig } from '../utils/service-config.js';
+import { loadRemoteImage, type RemoteCacheEntry, revalidateRemoteImage } from './remote.js';
 
 interface GenerationDataUncached {
-	cached: false;
+	cached: 'miss';
 	weight: {
 		before: number;
 		after: number;
@@ -27,32 +31,46 @@ interface GenerationDataUncached {
 }
 
 interface GenerationDataCached {
-	cached: true;
+	cached: 'revalidated' | 'hit';
 }
 
 type GenerationData = GenerationDataUncached | GenerationDataCached;
 
 type AssetEnv = {
-	logger: Logger;
+	logger: AstroLogger;
+	getImageService: () => Promise<LocalImageService>;
+	referencedImages: ReadonlySet<string>;
 	isSSR: boolean;
 	count: { total: number; current: number };
 	useCache: boolean;
 	assetsCacheDir: URL;
 	serverRoot: URL;
 	clientRoot: URL;
-	imageConfig: AstroConfig['image'];
+	imageConfig: ImageConfig;
 	assetsFolder: AstroConfig['build']['assets'];
 };
 
-type ImageData = { data: Uint8Array; expires: number };
+type ImageData = {
+	data: Uint8Array;
+	expires: number;
+	etag?: string;
+	lastModified?: string;
+};
 
 export async function prepareAssetsGenerationEnv(
-	pipeline: BuildPipeline,
+	options: StaticBuildOptions,
 	totalCount: number,
+	{
+		loadImageService,
+		referencedImages,
+	}: {
+		loadImageService: () => Promise<LocalImageService>;
+		referencedImages: ReadonlySet<string>;
+	},
 ): Promise<AssetEnv> {
-	const { config, logger } = pipeline;
+	const { settings, logger } = options;
 	let useCache = true;
-	const assetsCacheDir = new URL('assets/', config.cacheDir);
+	const assetsCacheDir = new URL('assets/', settings.config.cacheDir);
 	const count = { total: totalCount, current: 1 };
 
 	// Ensure that the cache directory exists
@@ -66,25 +84,34 @@ export async function prepareAssetsGenerationEnv(
 		useCache = false;
 	}
 
+	const isServerOutput = settings.buildOutput === 'server';
 	let serverRoot: URL, clientRoot: URL;
-	if (isServerLikeOutput(config)) {
-		serverRoot = config.build.server;
-		clientRoot = config.build.client;
+	if (isServerOutput) {
+		// Read source images from prerender output and write optimized images to client output.
+		serverRoot = options.outputDirectories.prerender;
+		clientRoot = options.outputDirectories.client;
 	} else {
-		serverRoot = getOutDirWithinCwd(config.outDir);
-		clientRoot = config.outDir;
+		// Static builds move source images to client output before image generation.
+		serverRoot = options.outputDirectories.client;
+		clientRoot = options.outputDirectories.client;
 	}
 
+	let imageService: Promise<LocalImageService> | undefined;
 	return {
 		logger,
-		isSSR: isServerLikeOutput(config),
+		getImageService: () => (imageService ??= loadImageService()),
+		referencedImages,
+		isSSR: isServerOutput,
 		count,
 		useCache,
 		assetsCacheDir,
 		serverRoot,
 		clientRoot,
-		imageConfig: config.image,
-		assetsFolder: config.build.assets,
+		imageConfig: {
+			...settings.config.image,
+			service: getImageServiceConfig(settings.config.image.service, 'build'),
+		},
+		assetsFolder: settings.config.build.assets,
 	};
 }
 
@@ -96,24 +123,18 @@ export async function generateImagesForPath(
 	originalFilePath: string,
 	transformsAndPath: MapValue<AssetsGlobalStaticImagesList>,
 	env: AssetEnv,
-	queue: PQueue,
 ) {
 	let originalImage: ImageData;
 
 	for (const [_, transform] of transformsAndPath.transforms) {
-		await queue
-			.add(async () => generateImage(transform.finalPath, transform.transform))
-			.catch((e) => {
-				throw e;
-			});
+		await generateImage(transform.finalPath, transform.transform);
 	}
 
-	// In SSR, we cannot know if an image is referenced in a server-rendered page, so we can't delete anything
-	// For instance, the same image could be referenced in both a server-rendered page and build-time-rendered page
+	// Delete original images that are only used for optimization
+	// The referencedImages set tracks images that were used via raw `src` access (e.g., <img src={img.src}>).
 	if (
-		!env.isSSR &&
 		transformsAndPath.originalSrcPath &&
-		!globalThis.astroAsset.referencedImages?.has(transformsAndPath.originalSrcPath)
+		!env.referencedImages.has(transformsAndPath.originalSrcPath)
 	) {
 		try {
 			if (transformsAndPath.originalSrcPath) {
@@ -135,14 +156,20 @@ export async function generateImagesForPath(
 		const timeEnd = performance.now();
 		const timeChange = getTimeStat(timeStart, timeEnd);
 		const timeIncrease = `(+${timeChange})`;
-		const statsText = generationData.cached
-			? `(reused cache entry)`
-			: `(before: ${generationData.weight.before}kB, after: ${generationData.weight.after}kB)`;
+		const statsText =
+			generationData.cached !== 'miss'
+				? generationData.cached === 'hit'
+					? `(reused cache entry)`
+					: `(revalidated cache entry)`
+				: `(before: ${generationData.weight.before}kB, after: ${generationData.weight.after}kB)`;
 		const count = `(${env.count.current}/${env.count.total})`;
 		env.logger.info(
 			null,
-			`  ${green('▶')} ${filepath} ${dim(statsText)} ${dim(timeIncrease)} ${dim(count)}`,
+			`  ${colors.green('▶')} ${filepath} ${colors.dim(statsText)} ${colors.dim(timeIncrease)} ${colors.dim(count)}`,
 		);
+		recordTiming('image', filepath, timeEnd - timeStart, {
+			cached: generationData.cached !== 'miss',
+		});
 		env.count.current++;
 	}
 
@@ -153,39 +180,91 @@ export async function generateImagesForPath(
 		const isLocalImage = isESMImportedImage(options.src);
 		const finalFileURL = new URL('.' + filepath, env.clientRoot);
 
-		// For remote images, instead of saving the image directly, we save a JSON file with the image data and expiration date from the server
-		const cacheFile = basename(filepath) + (isLocalImage ? '' : '.json');
+		const finalFolderURL = new URL('./', finalFileURL);
+		await fs.promises.mkdir(finalFolderURL, { recursive: true });
+
+		const cacheFile = basename(filepath);
 		const cachedFileURL = new URL(cacheFile, env.assetsCacheDir);
+
+		// For remote images, we also save a JSON file with the expiration date, etag and last-modified date from the server
+		const cacheMetaFile = cacheFile + '.json';
+		const cachedMetaFileURL = new URL(cacheMetaFile, env.assetsCacheDir);
 
 		// Check if we have a cached entry first
 		try {
 			if (isLocalImage) {
-				await fs.promises.copyFile(cachedFileURL, finalFileURL, fs.constants.COPYFILE_FICLONE);
+				await copyCachedFile(cachedFileURL, finalFileURL);
 
 				return {
-					cached: true,
+					cached: 'hit',
 				};
 			} else {
-				const JSONData = JSON.parse(readFileSync(cachedFileURL, 'utf-8')) as RemoteCacheEntry;
+				const JSONData = JSON.parse(readFileSync(cachedMetaFileURL, 'utf-8')) as RemoteCacheEntry;
 
-				if (!JSONData.data || !JSONData.expires) {
-					await fs.promises.unlink(cachedFileURL);
+				if (typeof JSONData.expires !== 'number') {
+					await Promise.allSettled([
+						fs.promises.unlink(cachedFileURL),
+						fs.promises.unlink(cachedMetaFileURL),
+					]);
 
 					throw new Error(
 						`Malformed cache entry for ${filepath}, cache will be regenerated for this file.`,
 					);
 				}
 
+				// Upgrade old base64 encoded asset cache to the new format
+				if (JSONData.data) {
+					const { data, ...meta } = JSONData;
+
+					await Promise.all([
+						fs.promises.writeFile(cachedFileURL, Buffer.from(data, 'base64')),
+						writeCacheMetaFile(cachedMetaFileURL, meta, env),
+					]);
+				}
+
 				// If the cache entry is not expired, use it
 				if (JSONData.expires > Date.now()) {
-					await fs.promises.writeFile(finalFileURL, Buffer.from(JSONData.data, 'base64'));
+					await copyCachedFile(cachedFileURL, finalFileURL);
 
-					return {
-						cached: true,
-					};
-				} else {
-					await fs.promises.unlink(cachedFileURL);
+					return { cached: 'hit' };
 				}
+
+				// Try to revalidate the cache
+				if (JSONData.etag || JSONData.lastModified) {
+					try {
+						const revalidatedData = await revalidateRemoteImage(options.src as string, {
+							etag: JSONData.etag,
+							lastModified: JSONData.lastModified,
+						});
+
+						if (revalidatedData.data !== null) {
+							// Image cache was stale, update original image to avoid redownload
+							originalImage = revalidatedData as ImageData;
+						} else {
+							// Freshen cache on disk and output cached image
+							await Promise.all([
+								writeCacheMetaFile(cachedMetaFileURL, revalidatedData, env),
+								copyCachedFile(cachedFileURL, finalFileURL),
+							]);
+
+							return { cached: 'revalidated' };
+						}
+					} catch (e) {
+						// Reuse stale cache if revalidation fails
+						env.logger.warn(
+							null,
+							`An error was encountered while revalidating a cached remote asset. Proceeding with stale cache. ${e}`,
+						);
+
+						await copyCachedFile(cachedFileURL, finalFileURL);
+						return { cached: 'hit' };
+					}
+				}
+
+				await Promise.allSettled([
+					fs.promises.unlink(cachedFileURL),
+					fs.promises.unlink(cachedMetaFileURL),
+				]);
 			}
 		} catch (e: any) {
 			if (e.code !== 'ENOENT') {
@@ -193,9 +272,6 @@ export async function generateImagesForPath(
 			}
 			// If the cache file doesn't exist, just move on, and we'll generate it
 		}
-
-		const finalFolderURL = new URL('./', finalFileURL);
-		await fs.promises.mkdir(finalFolderURL, { recursive: true });
 
 		// The original filepath or URL from the image transform
 		const originalImagePath = isLocalImage
@@ -209,9 +285,11 @@ export async function generateImagesForPath(
 		let resultData: Partial<ImageData> = {
 			data: undefined,
 			expires: originalImage.expires,
+			etag: originalImage.etag,
+			lastModified: originalImage.lastModified,
 		};
 
-		const imageService = (await getConfiguredImageService()) as LocalImageService;
+		const imageService = await env.getImageService();
 
 		try {
 			resultData.data = (
@@ -219,9 +297,13 @@ export async function generateImagesForPath(
 					originalImage.data,
 					{ ...options, src: originalImagePath },
 					env.imageConfig,
+					astroToRuntimeLogger(env.logger),
 				)
 			).data;
 		} catch (e) {
+			if (AstroError.is(e)) {
+				throw e;
+			}
 			const error = new AstroError(
 				{
 					...AstroErrorData.CouldNotTransformImage,
@@ -239,13 +321,10 @@ export async function generateImagesForPath(
 				if (isLocalImage) {
 					await fs.promises.writeFile(cachedFileURL, resultData.data);
 				} else {
-					await fs.promises.writeFile(
-						cachedFileURL,
-						JSON.stringify({
-							data: Buffer.from(resultData.data).toString('base64'),
-							expires: resultData.expires,
-						}),
-					);
+					await Promise.all([
+						fs.promises.writeFile(cachedFileURL, resultData.data),
+						writeCacheMetaFile(cachedMetaFileURL, resultData as ImageData, env),
+					]);
 				}
 			}
 		} catch (e) {
@@ -259,7 +338,7 @@ export async function generateImagesForPath(
 		}
 
 		return {
-			cached: false,
+			cached: 'miss',
 			weight: {
 				// Divide by 1024 to get size in kilobytes
 				before: Math.trunc(originalImage.data.byteLength / 1024),
@@ -269,21 +348,82 @@ export async function generateImagesForPath(
 	}
 }
 
-export function getStaticImageList(): AssetsGlobalStaticImagesList {
-	if (!globalThis?.astroAsset?.staticImages) {
-		return new Map();
+async function writeCacheMetaFile(
+	cachedMetaFileURL: URL,
+	resultData: Omit<ImageData, 'data'>,
+	env: AssetEnv,
+) {
+	try {
+		return await fs.promises.writeFile(
+			cachedMetaFileURL,
+			JSON.stringify({
+				expires: resultData.expires,
+				etag: resultData.etag,
+				lastModified: resultData.lastModified,
+			}),
+			'utf-8',
+		);
+	} catch (e) {
+		env.logger.warn(
+			null,
+			`An error was encountered while writing the cache file for a remote asset. Proceeding without caching this asset. Error: ${e}`,
+		);
+	}
+}
+
+export class StaticImageRegistry {
+	readonly images: AssetsGlobalStaticImagesList = new Map();
+	readonly referencedImages = new Set<string>();
+
+	addStaticImages(images: Iterable<SerializedStaticImage> | undefined): void {
+		if (!images) return;
+		for (const image of images) {
+			let transformsForPath = this.images.get(image.originalPath);
+			if (!transformsForPath) {
+				transformsForPath = { originalSrcPath: image.originalSrcPath, transforms: new Map() };
+				this.images.set(image.originalPath, transformsForPath);
+			}
+			if (!transformsForPath.transforms.has(image.hash)) {
+				transformsForPath.transforms.set(image.hash, {
+					finalPath: image.finalPath,
+					transform: image.transform,
+				});
+			}
+		}
 	}
 
-	return globalThis.astroAsset.staticImages;
+	addReferencedImages(fsPaths: Iterable<string> | undefined): void {
+		if (!fsPaths) return;
+		for (const fsPath of fsPaths) {
+			this.referencedImages.add(fsPath);
+		}
+	}
+
+	addMetadata(
+		metadata: { staticImages?: SerializedStaticImage[]; referencedImages?: string[] } | undefined,
+	): void {
+		this.addStaticImages(metadata?.staticImages);
+		this.addReferencedImages(metadata?.referencedImages);
+	}
+
+	addStaticImageList(list: AssetsGlobalStaticImagesList): void {
+		for (const [originalPath, { originalSrcPath, transforms }] of list) {
+			this.addStaticImages(
+				Array.from(transforms, ([hash, { finalPath, transform }]) => ({
+					originalPath,
+					originalSrcPath,
+					hash,
+					finalPath,
+					transform,
+				})),
+			);
+		}
+	}
 }
 
 async function loadImage(path: string, env: AssetEnv): Promise<ImageData> {
 	if (isRemotePath(path)) {
-		const remoteImage = await loadRemoteImage(path);
-		return {
-			data: remoteImage.data,
-			expires: remoteImage.expires,
-		};
+		return await loadRemoteImage(path, undefined, env.imageConfig);
 	}
 
 	return {

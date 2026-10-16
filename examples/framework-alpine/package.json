@@ -3,17 +3,19 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "dev": "astro dev",
-    "start": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/alpinejs": "^0.4.0",
-    "@types/alpinejs": "^3.13.10",
-    "alpinejs": "^3.14.1",
-    "astro": "^4.16.6"
+    "@astrojs/alpinejs": "^1.0.0",
+    "@types/alpinejs": "^3.17.0",
+    "alpinejs": "^3.17.4",
+    "astro": "^7.4.0"
   }
 }

@@ -16,15 +16,12 @@ function getSlug(
 		return attributes.id;
 	}
 	const textContent = attributes.content ?? getTextContent(children);
-	let slug = headingSlugger.slug(textContent);
-
-	if (slug.endsWith('-')) slug = slug.slice(0, -1);
-	return slug;
+	return headingSlugger.slug(textContent);
 }
 
-type HeadingIdConfig = MarkdocConfig & {
+interface HeadingIdConfig extends MarkdocConfig {
 	ctx: { headingSlugger: Slugger };
-};
+}
 
 /*
 	Expose standalone node for users to import in their config.

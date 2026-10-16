@@ -6,6 +6,7 @@ import Nav from '../components/Nav.astro';
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="generator" content={Astro.generator} />
 		<title>Astro - Hacker News</title>
@@ -16,8 +17,9 @@ import Nav from '../components/Nav.astro';
 		<slot />
 		<style is:global>
 			body {
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
-					Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+				font-family:
+					-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+					'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 				font-size: 15px;
 				background-color: rgb(226 232 240);
 				margin: 0;

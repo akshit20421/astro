@@ -1,14 +1,16 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AstroConfig, AstroIntegration } from 'astro';
+import type { AstroConfig, AstroIntegration, IntegrationResolvedRoute } from 'astro';
 import type { EnumChangefreq, LinkItem as LinkItemBase, SitemapItemLoose } from 'sitemap';
-import { ZodError } from 'zod';
+import { ZodError } from 'zod/v4';
 
 import { generateSitemap } from './generate-sitemap.js';
 import { validateOptions } from './validate-options.js';
 import { writeSitemap } from './write-sitemap.js';
+import { writeSitemapChunk } from './write-sitemap-chunk.js';
 
 export { EnumChangefreq as ChangeFreqEnum } from 'sitemap';
+
 export type ChangeFreq = `${EnumChangefreq}`;
 export type SitemapItem = Pick<
 	SitemapItemLoose,
@@ -18,7 +20,9 @@ export type LinkItem = LinkItemBase;
 
 export type SitemapOptions =
 	| {
+			filenameBase?: string;
 			filter?(page: string): boolean;
+			customSitemaps?: string[];
 			customPages?: string[];
 
 			i18n?: {
@@ -27,7 +31,6 @@ export type SitemapOptions =
 			};
 			// number of entries per sitemap file
 			entryLimit?: number;
-
 			// sitemap specific
 			changefreq?: ChangeFreq;
 			lastmod?: Date;
@@ -37,6 +40,17 @@ export type SitemapOptions =
 			serialize?(item: SitemapItem): SitemapItem | Promise<SitemapItem | undefined> | undefined;
 
 			xslURL?: string;
+			chunks?: Record<
+				string,
+				(item: SitemapItem) => SitemapItem | Promise<SitemapItem | undefined> | undefined
+			>;
+			// namespace configuration
+			namespaces?: {
+				news?: boolean;
+				xhtml?: boolean;
+				image?: boolean;
+				video?: boolean;
+			};
 	  }
 	| undefined;
 
@@ -46,7 +60,6 @@ function formatConfigErrorMessage(err: ZodError) {
 }
 
 const PKG_NAME = '@astrojs/sitemap';
-const OUTFILE = 'sitemap-index.xml';
 const STATUS_CODE_PAGES = new Set(['404', '500']);
 
 const isStatusCodePage = (locales: string[]) => {
@@ -67,17 +80,22 @@ const isStatusCodePage = (locales: string[]) => {
 	};
 };
 const createPlugin = (options?: SitemapOptions): AstroIntegration => {
+	let _routes: Array<IntegrationResolvedRoute>;
 	let config: AstroConfig;
 
 	return {
 		name: PKG_NAME,
 
 		hooks: {
+			'astro:routes:resolved': ({ routes }) => {
+				_routes = routes;
+			},
+
 			'astro:config:done': async ({ config: cfg }) => {
 				config = cfg;
 			},
 
-			'astro:build:done': async ({ dir, routes, pages, logger }) => {
+			'astro:build:done': async ({ dir, pages, logger }) => {
 				try {
 					if (!config.site) {
 						logger.warn(
@@ -88,8 +106,16 @@ const createPlugin = (options?: SitemapOptions): AstroIntegration => {
 
 					const opts = validateOptions(config.site, options);
 
-					const { filter, customPages, serialize, entryLimit } = opts;
-
+					const {
+						filenameBase,
+						filter,
+						customPages,
+						customSitemaps,
+						serialize,
+						entryLimit,
+						chunks,
+					} = opts;
+					const outFile = `${filenameBase}-index.xml`;
 					const finalSiteUrl = new URL(config.base, config.site);
 					const shouldIgnoreStatus = isStatusCodePage(Object.keys(opts.i18n?.locales ?? {}));
 					let pageUrls = pages
@@ -102,15 +128,12 @@ const createPlugin = (options?: SitemapOptions): AstroIntegration => {
 							return new URL(fullPath, finalSiteUrl).href;
 						});
 
-					const routeUrls = routes.reduce<string[]>((urls, r) => {
-						// Only expose pages, not endpoints or redirects
-						if (r.type !== 'page') return urls;
-
+					const addRouteUrl = (urls: string[], r: IntegrationResolvedRoute): void => {
 						/**
 						 * Dynamic URLs have entries with `undefined` pathnames
 						 */
 						if (r.pathname) {
-							if (shouldIgnoreStatus(r.pathname ?? r.route)) return urls;
+							if (shouldIgnoreStatus(r.pathname ?? r.pattern)) return;
 
 							// `finalSiteUrl` may end with a trailing slash
 							// or not because of base paths.
@@ -128,23 +151,30 @@ const createPlugin = (options?: SitemapOptions): AstroIntegration => {
 								urls.push(newUrl);
 							}
 						}
+					};
+
+					const routeUrls = _routes.reduce<string[]>((urls, r) => {
+						// Only expose pages, not endpoints or redirects
+						if (r.type !== 'page') return urls;
+
+						addRouteUrl(urls, r);
+
+						// Include i18n fallback routes (e.g. /fr/ falling back to /en/)
+						for (const fallbackRoute of r.fallbackRoutes ?? []) {
+							addRouteUrl(urls, fallbackRoute);
+						}
 
 						return urls;
 					}, []);
 
 					pageUrls = Array.from(new Set([...pageUrls, ...routeUrls, ...(customPages ?? [])]));
 
-					try {
-						if (filter) {
-							pageUrls = pageUrls.filter(filter);
-						}
-					} catch (err) {
-						logger.error(`Error filtering pages\n${(err as any).toString()}`);
-						return;
+					if (filter) {
+						pageUrls = pageUrls.filter((value) => filter(value));
 					}
 
 					if (pageUrls.length === 0) {
-						logger.warn(`No pages found!\n\`${OUTFILE}\` not created.`);
+						logger.warn(`No pages found!\n\`${outFile}\` not created.`);
 						return;
 					}
 
@@ -169,20 +199,71 @@ const createPlugin = (options?: SitemapOptions): AstroIntegration => {
 							return;
 						}
 					}
+
 					const destDir = fileURLToPath(dir);
+					const lastmod = opts.lastmod?.toISOString();
 					const xslURL = opts.xslURL ? new URL(opts.xslURL, finalSiteUrl).href : undefined;
-					await writeSitemap(
-						{
-							hostname: finalSiteUrl.href,
-							destinationDir: destDir,
-							publicBasePath: config.base,
-							sourceData: urlData,
-							limit: entryLimit,
-							xslURL: xslURL,
-						},
-						config,
-					);
-					logger.info(`\`${OUTFILE}\` created at \`${path.relative(process.cwd(), destDir)}\``);
+
+					if (chunks) {
+						try {
+							let groupedUrlCollection: SitemapItem['url'][] = [];
+							const chunksItem: Record<string, SitemapItem[]> = {};
+							for (const [key, cb] of Object.entries(chunks)) {
+								// Create a new, separate collection for each key
+								const collection: SitemapItem[] = [];
+
+								for (const item of urlData) {
+									// Await the asynchronous operation
+									const collect = await Promise.resolve(cb(item));
+									if (collect) {
+										collection.push(collect);
+									}
+								}
+
+								// Assign the specific collection to its key
+								chunksItem[key] = collection;
+								groupedUrlCollection = [
+									...groupedUrlCollection,
+									...collection.map((coll) => coll.url),
+								];
+							}
+							chunksItem['pages'] = urlData.filter(
+								(urlDataItem) => !groupedUrlCollection.includes(urlDataItem.url),
+							);
+							// Process each chunk here
+							await writeSitemapChunk({
+								filenameBase,
+								hostname: finalSiteUrl.href,
+								sitemapHostname: finalSiteUrl.href,
+								sourceData: chunksItem,
+								destinationDir: destDir,
+								publicBasePath: config.base,
+								customSitemaps,
+								limit: entryLimit,
+								xslURL,
+								lastmod,
+								namespaces: opts.namespaces,
+							});
+							logger.info(`\`${outFile}\` created at \`${path.relative(process.cwd(), destDir)}\``);
+							return;
+						} catch (err) {
+							logger.error(`Error chunking sitemaps\n${(err as any).toString()}`);
+							return;
+						}
+					}
+					await writeSitemap({
+						filenameBase: filenameBase,
+						hostname: finalSiteUrl.href,
+						destinationDir: destDir,
+						publicBasePath: config.base,
+						sourceData: urlData,
+						limit: entryLimit,
+						customSitemaps,
+						xslURL: xslURL,
+						lastmod,
+						namespaces: opts.namespaces,
+					});
+					logger.info(`\`${outFile}\` created at \`${path.relative(process.cwd(), destDir)}\``);
 				} catch (err) {
 					if (err instanceof ZodError) {
 						logger.warn(formatConfigErrorMessage(err));

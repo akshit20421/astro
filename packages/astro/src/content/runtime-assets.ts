@@ -1,20 +1,23 @@
-import type { PluginContext } from 'rollup';
-import { z } from 'zod';
+import type { Rolldown } from 'vite';
+import * as z from 'zod/v4';
 import type { ImageMetadata, OmitBrand } from '../assets/types.js';
-import { emitESMImage } from '../assets/utils/node/emitAsset.js';
+import { emitClientAsset } from '../assets/utils/assets.js';
+import { emitImageMetadata } from '../assets/utils/node.js';
 
 export function createImage(
-	pluginContext: PluginContext,
+	pluginContext: Rolldown.PluginContext,
 	shouldEmitFile: boolean,
 	entryFilePath: string,
 ) {
 	return () => {
 		return z.string().transform(async (imagePath, ctx) => {
 			const resolvedFilePath = (await pluginContext.resolve(imagePath, entryFilePath))?.id;
-			const metadata = (await emitESMImage(
+			const metadata = (await emitImageMetadata(
 				resolvedFilePath,
-				pluginContext.meta.watchMode,
-				shouldEmitFile ? pluginContext.emitFile : undefined,
+				shouldEmitFile
+					? (opts: Parameters<Rolldown.PluginContext['emitFile']>[0]) =>
+							emitClientAsset(pluginContext, opts)
+					: undefined,
 			)) as OmitBrand<ImageMetadata>;
 
 			if (!metadata) {

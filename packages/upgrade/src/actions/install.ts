@@ -1,10 +1,9 @@
-import type { Context, PackageInfo } from './context.js';
-
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { color, say } from '@astrojs/cli-kit';
 import { random, sleep } from '@astrojs/cli-kit/utils';
+import { resolveCommand } from 'package-manager-detector';
 import {
 	banner,
 	bye,
@@ -22,12 +21,14 @@ import {
 	warn,
 } from '../messages.js';
 import { shell } from '../shell.js';
+import type { Context, PackageInfo } from './context.js';
 
 export async function install(
 	ctx: Pick<
 		Context,
 		'version' | 'packages' | 'packageManager' | 'prompt' | 'dryRun' | 'exit' | 'cwd'
 	>,
+	shellFn: typeof shell = shell,
 ) {
 	await banner();
 	newline();
@@ -48,7 +49,7 @@ export async function install(
 	const majors: PackageInfo[] = [];
 	for (const packageInfo of toInstall) {
 		const word = ctx.dryRun ? 'can' : 'will';
-		await upgrade(packageInfo, `${word} be updated to`);
+		await upgrade(packageInfo, `${word} be updated`);
 		if (packageInfo.isMajor) {
 			majors.push(packageInfo);
 		}
@@ -80,7 +81,7 @@ export async function install(
 	if (ctx.dryRun) {
 		await info('--dry-run', `Skipping dependency installation`);
 	} else {
-		await runInstallCommand(ctx, dependencies, devDependencies);
+		await runInstallCommand(ctx, dependencies, devDependencies, shellFn);
 	}
 }
 
@@ -90,8 +91,8 @@ function filterPackages(ctx: Pick<Context, 'packages'>) {
 	const devDependencies: PackageInfo[] = [];
 	for (const packageInfo of ctx.packages) {
 		const { currentVersion, targetVersion, isDevDependency } = packageInfo;
-		// Remove prefix from `currentVersion` before comparing
-		if (currentVersion.replace(/^\D+/, '') === targetVersion) {
+		// Remove prefix from version before comparing
+		if (currentVersion.replace(/^\D+/, '') === targetVersion.replace(/^\D+/, '')) {
 			current.push(packageInfo);
 		} else {
 			const arr = isDevDependency ? devDependencies : dependencies;
@@ -119,57 +120,85 @@ async function runInstallCommand(
 	ctx: Pick<Context, 'cwd' | 'packageManager' | 'exit'>,
 	dependencies: PackageInfo[],
 	devDependencies: PackageInfo[],
+	shellFn: typeof shell = shell,
 ) {
 	const cwd = fileURLToPath(ctx.cwd);
-	if (ctx.packageManager === 'yarn') await ensureYarnLock({ cwd });
+	if (ctx.packageManager.name === 'yarn') await ensureYarnLock({ cwd });
 
-	const installCmd =
-		ctx.packageManager === 'yarn' || ctx.packageManager === 'pnpm' ? 'add' : 'install';
+	const installCommand = resolveCommand(ctx.packageManager.agent, 'add', []);
+	if (!installCommand) {
+		// NOTE: Usually it's impossible to reach here as `package-manager-detector` should
+		// already match a supported agent
+		error('error', `Unable to find install command for ${ctx.packageManager.name}.`);
+		return ctx.exit(1);
+	}
+	const doInstall = async (legacyPeerDeps = false) => {
+		try {
+			if (dependencies.length > 0) {
+				await shellFn(
+					installCommand.command,
+					[
+						...installCommand.args,
+						...(legacyPeerDeps ? ['--legacy-peer-deps'] : []),
+						...dependencies.map(
+							({ name, targetVersion }) => `${name}@${targetVersion.replace(/^\^/, '')}`,
+						),
+					],
+					{ cwd, timeout: 90_000 },
+				);
+			}
+			if (devDependencies.length > 0) {
+				await shellFn(
+					installCommand.command,
+					[
+						...installCommand.args,
+						...(legacyPeerDeps ? ['--legacy-peer-deps'] : []),
+						...devDependencies.map(
+							({ name, targetVersion }) => `${name}@${targetVersion.replace(/^\^/, '')}`,
+						),
+					],
+					{ cwd, timeout: 90_000 },
+				);
+			}
+		} catch (err: unknown) {
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			// If the error is related to peer dependencies, we can try again with `--legacy-peer-deps`
+			if (
+				ctx.packageManager.name === 'npm' &&
+				!legacyPeerDeps &&
+				errorMessage.includes('peer dependenc')
+			) {
+				return doInstall(true);
+			}
 
-	await spinner({
-		start: `Installing dependencies with ${ctx.packageManager}...`,
-		end: `Installed dependencies!`,
-		while: async () => {
-			try {
-				if (dependencies.length > 0) {
-					await shell(
-						ctx.packageManager,
-						[
-							installCmd,
-							...dependencies.map(
-								({ name, targetVersion }) => `${name}@${targetVersion.replace(/^\^/, '')}`,
-							),
-						],
-						{ cwd, timeout: 90_000, stdio: 'ignore' },
-					);
-				}
-				if (devDependencies.length > 0) {
-					await shell(
-						ctx.packageManager,
-						[
-							installCmd,
-							'--save-dev',
-							...devDependencies.map(
-								({ name, targetVersion }) => `${name}@${targetVersion.replace(/^\^/, '')}`,
-							),
-						],
-						{ cwd, timeout: 90_000, stdio: 'ignore' },
-					);
-				}
-			} catch {
-				const packages = [...dependencies, ...devDependencies]
-					.map(({ name, targetVersion }) => `${name}@${targetVersion}`)
-					.join(' ');
-				newline();
+			const manualInstallCommand = [
+				installCommand.command,
+				...installCommand.args,
+				...[...dependencies, ...devDependencies].map(
+					({ name, targetVersion }) => `${name}@${targetVersion}`,
+				),
+			].join(' ');
+			newline();
+			// pnpm's minimumReleaseAge policy can block installs when run non-interactively
+			if (errorMessage.includes('MINIMUM_RELEASE_AGE')) {
 				error(
 					'error',
-					`Dependencies failed to install, please run the following command manually:\n${color.bold(
-						`${ctx.packageManager} ${installCmd} ${packages}`,
-					)}`,
+					`pnpm's ${color.bold('minimumReleaseAge')} policy blocked the installation. Run the following command manually to confirm the update:\n${color.bold(manualInstallCommand)}`,
 				);
-				return ctx.exit(1);
+			} else {
+				error(
+					'error',
+					`Dependencies failed to install, please run the following command manually:\n${color.bold(manualInstallCommand)}`,
+				);
 			}
-		},
+			return ctx.exit(1);
+		}
+	};
+
+	await spinner({
+		start: `Installing dependencies with ${ctx.packageManager.name}...`,
+		end: `Installed dependencies!`,
+		while: doInstall,
 	});
 
 	await say([`${random(celebrations)} ${random(done)}`, random(bye)], { clear: false });

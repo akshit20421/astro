@@ -1,14 +1,13 @@
 import { isRemotePath, removeBase } from '@astrojs/internal-helpers/path';
 import { CONTENT_IMAGE_FLAG, IMAGE_IMPORT_PREFIX } from '../../content/consts.js';
-import { shorthash } from '../../runtime/server/shorthash.js';
 import { VALID_INPUT_FORMATS } from '../consts.js';
 
 /**
  * Resolves an image src from a content file (such as markdown) to a module ID or import that can be resolved by Vite.
  *
  * @param imageSrc The src attribute of an image tag
- * @param filePath The path to the file that contains the imagem relative to the site root
- * @returns A module id of the image that can be rsolved by Vite, or undefined if it is not a local image
+ * @param filePath The path to the file that contains the image relative to the site root
+ * @returns A module id of the image that can be resolved by Vite, or undefined if it is not a local image
  */
 export function imageSrcToImportId(imageSrc: string, filePath?: string): string | undefined {
 	// If the import is coming from the data store it will have a special prefix to identify it
@@ -20,7 +19,9 @@ export function imageSrcToImportId(imageSrc: string, filePath?: string): string 
 		return;
 	}
 	// We only care about images
-	const ext = imageSrc.split('.').at(-1) as (typeof VALID_INPUT_FORMATS)[number] | undefined;
+	const ext = imageSrc.split('.').at(-1)?.toLowerCase() as
+		| (typeof VALID_INPUT_FORMATS)[number]
+		| undefined;
 	if (!ext || !VALID_INPUT_FORMATS.includes(ext)) {
 		return;
 	}
@@ -37,6 +38,3 @@ export function imageSrcToImportId(imageSrc: string, filePath?: string): string 
 	}
 	return `${imageSrc}?${params.toString()}`;
 }
-
-export const importIdToSymbolName = (importId: string) =>
-	`__ASTRO_IMAGE_IMPORT_${shorthash(importId)}`;

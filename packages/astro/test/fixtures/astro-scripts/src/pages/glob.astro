@@ -1,5 +1,6 @@
 ---
-const components = await Astro.glob('/src/components/Glob/*');
+import '../styles/global.css';
+const components = Object.values(import.meta.glob('/src/components/Glob/*', { eager: true }));
 const MyComponent = components[0].default;
 ---
 

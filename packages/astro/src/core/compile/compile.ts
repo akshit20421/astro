@@ -1,24 +1,26 @@
-import type { TransformResult } from '@astrojs/compiler';
-import type { ResolvedConfig } from 'vite';
-import type { AstroConfig } from '../../@types/astro.js';
-
 import { fileURLToPath } from 'node:url';
-import { transform } from '@astrojs/compiler';
-import { normalizePath } from 'vite';
-import type { AstroPreferences } from '../../preferences/index.js';
+import {
+	preprocessStyles,
+	transform,
+	type TransformOptions,
+	type TransformResult,
+} from '@astrojs/compiler-rs';
+import type { ResolvedConfig } from 'vite';
+import type { AstroConfig } from '../../types/public/config.js';
 import type { AstroError } from '../errors/errors.js';
 import { AggregateError, CompilerError } from '../errors/errors.js';
 import { AstroErrorData } from '../errors/index.js';
-import { resolvePath } from '../viteUtils.js';
-import { type PartialCompileCssResult, createStylePreprocessor } from './style.js';
+import { normalizePath, resolvePath } from '../viteUtils.js';
+import { createStylePreprocessor, type PartialCompileCssResult } from './style.js';
 import type { CompileCssResult } from './types.js';
 
 export interface CompileProps {
 	astroConfig: AstroConfig;
 	viteConfig: ResolvedConfig;
-	preferences: AstroPreferences;
+	toolbarEnabled: boolean;
 	filename: string;
 	source: string;
+	inlineComponentAssets?: boolean;
 }
 
 export interface CompileResult extends Omit<TransformResult, 'css'> {
@@ -28,49 +30,54 @@ export interface CompileResult extends Omit<TransformResult, 'css'> {
 export async function compile({
 	astroConfig,
 	viteConfig,
-	preferences,
+	toolbarEnabled,
 	filename,
 	source,
+	inlineComponentAssets,
 }: CompileProps): Promise<CompileResult> {
-	// Because `@astrojs/compiler` can't return the dependencies for each style transformed,
-	// we need to use an external array to track the dependencies whenever preprocessing is called,
-	// and we'll rebuild the final `css` result after transformation.
 	const cssPartialCompileResults: PartialCompileCssResult[] = [];
 	const cssTransformErrors: AstroError[] = [];
 	let transformResult: TransformResult;
 
 	try {
-		// Transform from `.astro` to valid `.ts`
-		// use `sourcemap: "both"` so that sourcemap is included in the code
-		// result passed to esbuild, but also available in the catch handler.
-		transformResult = await transform(source, {
+		const preprocessedStyles = await preprocessStyles(
+			source,
+			createStylePreprocessor({
+				filename,
+				viteConfig,
+				astroConfig,
+				cssPartialCompileResults,
+				cssTransformErrors,
+			}),
+		);
+
+		const transformOptions: TransformOptions & { inlineComponentAssets?: boolean } = {
 			compact: astroConfig.compressHTML,
 			filename,
+			inlineComponentAssets,
 			normalizedFilename: normalizeFilename(filename, astroConfig.root),
 			sourcemap: 'both',
 			internalURL: 'astro/compiler-runtime',
-			// TODO: this is no longer necessary for `Astro.site`
-			// but it somehow allows working around caching issues in content collections for some tests
+			// TODO: remove in Astro v8
 			astroGlobalArgs: JSON.stringify(astroConfig.site),
 			scopedStyleStrategy: astroConfig.scopedStyleStrategy,
 			resultScopedSlot: true,
 			transitionsAnimationURL: 'astro/components/viewtransitions.css',
+			// Source annotations only serve the dev toolbar. Vitest also runs Vite in `serve`,
+			// so skip them in `test` mode to keep rendered markup (e.g. from the Container API)
+			// free of machine-specific paths. See https://github.com/withastro/astro/issues/18162
 			annotateSourceFile:
 				viteConfig.command === 'serve' &&
+				viteConfig.mode !== 'test' &&
 				astroConfig.devToolbar &&
 				astroConfig.devToolbar.enabled &&
-				(await preferences.get('devToolbar.enabled')),
-			renderScript: astroConfig.experimental.directRenderScript,
-			preprocessStyle: createStylePreprocessor({
-				filename,
-				viteConfig,
-				cssPartialCompileResults,
-				cssTransformErrors,
-			}),
-			async resolvePath(specifier) {
+				toolbarEnabled,
+			preprocessedStyles,
+			resolvePath(specifier) {
 				return resolvePath(specifier, filename);
 			},
-		});
+		};
+		transformResult = transform(source, transformOptions);
 	} catch (err: any) {
 		// The compiler should be able to handle errors by itself, however
 		// for the rare cases where it can't let's directly throw here with as much info as possible
@@ -84,7 +91,7 @@ export async function compile({
 		});
 	}
 
-	handleCompileResultErrors(transformResult, cssTransformErrors);
+	handleCompileResultErrors(filename, transformResult, cssTransformErrors);
 
 	return {
 		...transformResult,
@@ -95,19 +102,21 @@ export async function compile({
 	};
 }
 
-function handleCompileResultErrors(result: TransformResult, cssTransformErrors: AstroError[]) {
-	// TODO: Export the DiagnosticSeverity enum from @astrojs/compiler?
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-	const compilerError = result.diagnostics.find((diag) => diag.severity === 1);
+function handleCompileResultErrors(
+	filename: string,
+	result: TransformResult,
+	cssTransformErrors: AstroError[],
+) {
+	const compilerError = result.diagnostics.find((diag) => diag.severity === 'error');
 
 	if (compilerError) {
 		throw new CompilerError({
 			name: 'CompilerError',
 			message: compilerError.text,
 			location: {
-				line: compilerError.location.line,
-				column: compilerError.location.column,
-				file: compilerError.location.file,
+				line: compilerError.labels[0].line,
+				column: compilerError.labels[0].column,
+				file: filename,
 			},
 			hint: compilerError.hint,
 		});

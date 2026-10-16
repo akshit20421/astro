@@ -1,28 +1,11 @@
 import type http from 'node:http';
 import { Http2ServerResponse } from 'node:http2';
-import type { ErrorWithMetadata } from '../core/errors/index.js';
-import type { ModuleLoader } from '../core/module-loader/index.js';
-
 import { Readable } from 'node:stream';
 import { getSetCookiesFromResponse } from '../core/cookies/index.js';
 import { getViteErrorPayload } from '../core/errors/dev/index.js';
-import notFoundTemplate from '../template/4xx.js';
-
-export async function handle404Response(
-	origin: string,
-	req: http.IncomingMessage,
-	res: http.ServerResponse,
-) {
-	const pathname = decodeURI(new URL(origin + req.url).pathname);
-
-	const html = notFoundTemplate({
-		statusCode: 404,
-		title: 'Not found',
-		tabTitle: '404: Not Found',
-		pathname,
-	});
-	writeHtmlResponse(res, 404, html);
-}
+import type { ErrorWithMetadata } from '../core/errors/index.js';
+import type { ModuleLoader } from '../core/module-loader/index.js';
+import { redirectTemplate } from '../core/routing/3xx.js';
 
 export async function handle500Response(
 	loader: ModuleLoader,
@@ -46,27 +29,43 @@ export async function handle500Response(
 
 export function writeHtmlResponse(res: http.ServerResponse, statusCode: number, html: string) {
 	res.writeHead(statusCode, {
-		'Content-Type': 'text/html; charset=utf-8',
+		'Content-Type': 'text/html',
 		'Content-Length': Buffer.byteLength(html, 'utf-8'),
 	});
 	res.write(html);
 	res.end();
 }
 
-export async function writeWebResponse(res: http.ServerResponse, webResponse: Response) {
+export function writeRedirectResponse(
+	res: http.ServerResponse,
+	statusCode: number,
+	location: string,
+) {
+	const html = redirectTemplate({
+		status: statusCode,
+		absoluteLocation: location,
+		relativeLocation: location,
+	});
+	res.writeHead(statusCode, {
+		Location: location,
+		'Content-Type': 'text/html',
+		'Content-Length': Buffer.byteLength(html, 'utf-8'),
+	});
+	res.write(html);
+	res.end();
+}
+
+async function writeWebResponse(res: http.ServerResponse, webResponse: Response) {
 	const { status, headers, body, statusText } = webResponse;
 
 	// Attach any set-cookie headers added via Astro.cookies.set()
-	const setCookieHeaders = Array.from(getSetCookiesFromResponse(webResponse));
-	if (setCookieHeaders.length) {
-		// Always use `res.setHeader` because headers.append causes them to be concatenated.
-		res.setHeader('set-cookie', setCookieHeaders);
-	}
+	const setCookiesFromResponse = Array.from(getSetCookiesFromResponse(webResponse));
+	const setCookieHeaders = [...setCookiesFromResponse, ...headers.getSetCookie()];
 
 	const _headers: http.OutgoingHttpHeaders = Object.fromEntries(headers.entries());
 
-	if (headers.has('set-cookie')) {
-		_headers['set-cookie'] = headers.getSetCookie();
+	if (setCookieHeaders.length) {
+		_headers['set-cookie'] = setCookieHeaders;
 	}
 	// HTTP/2 doesn't support statusMessage
 	if (!(res instanceof Http2ServerResponse)) {

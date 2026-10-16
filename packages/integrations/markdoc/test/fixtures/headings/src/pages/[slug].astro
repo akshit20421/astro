@@ -1,21 +1,20 @@
 ---
-import { CollectionEntry, getCollection } from "astro:content";
+import { CollectionEntry, getCollection, render } from "astro:content";
 
 export async function getStaticPaths() {
 	const docs = await getCollection('docs');
-	return docs.map(doc => ({ params: { slug: doc.slug }, props: doc }));
+	return docs.map(doc => ({ params: { slug: doc.id }, props: doc }));
 }
 
 type Props = CollectionEntry<'docs'>;
 
-const { Content, headings } = await Astro.props.render();
+const { Content, headings } = await render(Astro.props);
 ---
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Content</title>
 </head>

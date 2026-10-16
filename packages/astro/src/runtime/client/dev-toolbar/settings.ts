@@ -1,4 +1,5 @@
-import type { Placement } from './ui-library/window.js';
+import type { DevToolbarMetadata } from '../../../types/public/toolbar.js';
+import { isValidPlacement, type Placement } from './ui-library/window.js';
 
 export interface Settings {
 	disableAppNotification: boolean;
@@ -15,15 +16,17 @@ export const defaultSettings = {
 export const settings = getSettings();
 
 function getSettings() {
+	// 1. Start with hardcoded defaults
 	let _settings: Settings = { ...defaultSettings };
-	const toolbarSettings = localStorage.getItem('astro:dev-toolbar:settings');
 
-	// TODO: Remove in Astro 5.0
-	const oldSettings = localStorage.getItem('astro:dev-overlay:settings');
-	if (oldSettings && !toolbarSettings) {
-		localStorage.setItem('astro:dev-toolbar:settings', oldSettings);
-		localStorage.removeItem('astro:dev-overlay:settings');
+	// 2. Override with config placement (if provided)
+	const configPlacement = (globalThis as DevToolbarMetadata).__astro_dev_toolbar__?.placement;
+	if (configPlacement && isValidPlacement(configPlacement)) {
+		_settings.placement = configPlacement;
 	}
+
+	// 3. Override with localStorage (preserves user's UI choice)
+	const toolbarSettings = localStorage.getItem('astro:dev-toolbar:settings');
 
 	if (toolbarSettings) {
 		_settings = { ..._settings, ...JSON.parse(toolbarSettings) };
@@ -35,6 +38,7 @@ function getSettings() {
 	}
 
 	function log(message: string, level: 'log' | 'warn' | 'error' = 'log') {
+		// biome-ignore lint/suspicious/noConsole: it can't infer types yet
 		console[level](
 			`%cAstro`,
 			'background: linear-gradient(66.77deg, #D83333 0%, #F041FF 100%); color: white; padding-inline: 4px; border-radius: 2px; font-family: monospace;',

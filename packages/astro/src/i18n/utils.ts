@@ -1,5 +1,6 @@
-import type { AstroConfig, Locales } from '../@types/astro.js';
-import { normalizeTheLocale, toCodes } from './index.js';
+import type { Locales } from '../types/public/config.js';
+import { getAllCodes } from './index.js';
+import { normalizeTheLocale, normalizeThePath } from './path.js';
 
 type BrowserLocale = {
 	locale: string;
@@ -61,7 +62,7 @@ export function parseLocale(header: string): BrowserLocale[] {
 }
 
 function sortAndFilterLocales(browserLocaleList: BrowserLocale[], locales: Locales) {
-	const normalizedLocales = toCodes(locales).map(normalizeTheLocale);
+	const normalizedLocales = getAllCodes(locales).map(normalizeTheLocale);
 	return browserLocaleList
 		.filter((browserLocale) => {
 			if (browserLocale.locale !== '*') {
@@ -70,10 +71,11 @@ function sortAndFilterLocales(browserLocaleList: BrowserLocale[], locales: Local
 			return true;
 		})
 		.sort((a, b) => {
-			if (a.qualityValue && b.qualityValue) {
-				return Math.sign(b.qualityValue - a.qualityValue);
-			}
-			return 0;
+			// An absent `q=` means quality 1.0 (RFC 7231), while a bare `*` defaults
+			// to 0 so it is never ranked above a real locale.
+			const qa = a.locale === '*' ? (a.qualityValue ?? 0) : (a.qualityValue ?? 1);
+			const qb = b.locale === '*' ? (b.qualityValue ?? 0) : (b.qualityValue ?? 1);
+			return qb - qa;
 		});
 }
 
@@ -91,15 +93,17 @@ export function computePreferredLocale(request: Request, locales: Locales): stri
 
 		const firstResult = browserLocaleList.at(0);
 		if (firstResult && firstResult.locale !== '*') {
-			for (const currentLocale of locales) {
+			outer: for (const currentLocale of locales) {
 				if (typeof currentLocale === 'string') {
 					if (normalizeTheLocale(currentLocale) === normalizeTheLocale(firstResult.locale)) {
 						result = currentLocale;
+						break;
 					}
 				} else {
 					for (const currentCode of currentLocale.codes) {
 						if (normalizeTheLocale(currentCode) === normalizeTheLocale(firstResult.locale)) {
-							result = currentLocale.path;
+							result = currentCode;
+							break outer;
 						}
 					}
 				}
@@ -118,14 +122,7 @@ export function computePreferredLocaleList(request: Request, locales: Locales): 
 
 		// SAFETY: bang operator is safe because checked by the previous condition
 		if (browserLocaleList.length === 1 && browserLocaleList.at(0)!.locale === '*') {
-			return locales.map((locale) => {
-				if (typeof locale === 'string') {
-					return locale;
-				} else {
-					// SAFETY: codes is never empty
-					return locale.codes.at(0)!;
-				}
-			});
+			return getAllCodes(locales);
 		} else if (browserLocaleList.length > 0) {
 			for (const browserLocale of browserLocaleList) {
 				for (const loopLocale of locales) {
@@ -135,8 +132,8 @@ export function computePreferredLocaleList(request: Request, locales: Locales): 
 						}
 					} else {
 						for (const code of loopLocale.codes) {
-							if (code === browserLocale.locale) {
-								result.push(loopLocale.path);
+							if (normalizeTheLocale(code) === normalizeTheLocale(browserLocale.locale)) {
+								result.push(code);
 							}
 						}
 					}
@@ -153,7 +150,11 @@ export function computeCurrentLocale(
 	locales: Locales,
 	defaultLocale: string,
 ): string | undefined {
-	for (const segment of pathname.split('/')) {
+	// pages that use a locale param ([locale].astro or [locale]/index.astro)
+	// and getStaticPaths make [locale].html the pathname during SSG
+	// which will not match a configured locale without removing .html
+	// as we do in normalizeThePath
+	for (const segment of pathname.split('/').map(normalizeThePath)) {
 		for (const locale of locales) {
 			if (typeof locale === 'string') {
 				// we skip ta locale that isn't present in the current segment
@@ -189,54 +190,37 @@ export function computeCurrentLocale(
 	}
 }
 
-export type RoutingStrategies =
-	| 'manual'
-	| 'pathname-prefix-always'
-	| 'pathname-prefix-other-locales'
-	| 'pathname-prefix-always-no-redirect'
-	| 'domains-prefix-always'
-	| 'domains-prefix-other-locales'
-	| 'domains-prefix-always-no-redirect';
-export function toRoutingStrategy(
-	routing: NonNullable<AstroConfig['i18n']>['routing'],
-	domains: NonNullable<AstroConfig['i18n']>['domains'],
-) {
-	let strategy: RoutingStrategies;
-	const hasDomains = domains ? Object.keys(domains).length > 0 : false;
-	if (routing === 'manual') {
-		strategy = 'manual';
-	} else {
-		if (!hasDomains) {
-			if (routing?.prefixDefaultLocale === true) {
-				if (routing.redirectToDefaultLocale) {
-					strategy = 'pathname-prefix-always';
-				} else {
-					strategy = 'pathname-prefix-always-no-redirect';
-				}
-			} else {
-				strategy = 'pathname-prefix-other-locales';
-			}
+/**
+ * Check if any of the route's resolved param values match a configured locale.
+ * This handles dynamic routes like `[locale]` or `[...path]` where the locale
+ * isn't in a static segment of the route pathname.
+ */
+export function computeCurrentLocaleFromParams(
+	params: Record<string, string | undefined>,
+	locales: Locales,
+): string | undefined {
+	// Precompute lookup maps for O(1) matching instead of nested loops.
+	// normalizedCode -> original locale string or first code for object locales
+	const byNormalizedCode = new Map<string, string>();
+	// path -> first code (for object locales)
+	const byPath = new Map<string, string>();
+
+	for (const locale of locales) {
+		if (typeof locale === 'string') {
+			byNormalizedCode.set(normalizeTheLocale(locale), locale);
 		} else {
-			if (routing?.prefixDefaultLocale === true) {
-				if (routing.redirectToDefaultLocale) {
-					strategy = 'domains-prefix-always';
-				} else {
-					strategy = 'domains-prefix-always-no-redirect';
-				}
-			} else {
-				strategy = 'domains-prefix-other-locales';
+			byPath.set(locale.path, locale.codes[0]);
+			for (const code of locale.codes) {
+				byNormalizedCode.set(normalizeTheLocale(code), code);
 			}
 		}
 	}
 
-	return strategy;
-}
-
-export function toFallbackType(
-	routing: NonNullable<AstroConfig['i18n']>['routing'],
-): 'redirect' | 'rewrite' {
-	if (routing === 'manual') {
-		return 'rewrite';
+	for (const value of Object.values(params)) {
+		if (!value) continue;
+		const pathMatch = byPath.get(value);
+		if (pathMatch) return pathMatch;
+		const codeMatch = byNormalizedCode.get(normalizeTheLocale(value));
+		if (codeMatch) return codeMatch;
 	}
-	return routing.fallbackType;
 }

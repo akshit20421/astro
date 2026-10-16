@@ -1,28 +1,6 @@
-import type { Writable } from 'node:stream';
-import debugPackage from 'debug';
-import { type LogMessage, type LogWritable, getEventPrefix, levels } from './core.js';
+import { createDebug, enable as obugEnable } from 'obug';
 
-type ConsoleStream = Writable & {
-	fd: 1 | 2;
-};
-
-export const nodeLogDestination: LogWritable<LogMessage> = {
-	write(event: LogMessage) {
-		let dest: ConsoleStream = process.stderr;
-		if (levels[event.level] < levels['error']) {
-			dest = process.stdout;
-		}
-		let trailingLine = event.newLine ? '\n' : '';
-		if (event.label === 'SKIP_FORMAT') {
-			dest.write(event.message + trailingLine);
-		} else {
-			dest.write(getEventPrefix(event) + ' ' + event.message + trailingLine);
-		}
-		return true;
-	},
-};
-
-const debuggers: Record<string, debugPackage.Debugger['log']> = {};
+const debuggers: Record<string, ReturnType<typeof createDebug>> = {};
 
 /**
  * Emit a message only shown in debug mode.
@@ -32,15 +10,17 @@ const debuggers: Record<string, debugPackage.Debugger['log']> = {};
  */
 function debug(type: string, ...messages: Array<any>) {
 	const namespace = `astro:${type}`;
-	debuggers[namespace] = debuggers[namespace] || debugPackage(namespace);
-	return debuggers[namespace](...messages);
+	debuggers[namespace] = debuggers[namespace] || createDebug(namespace);
+	return debuggers[namespace](...(messages as [any, ...any[]]));
 }
 
 // This is gross, but necessary since we are depending on globals.
 (globalThis as any)._astroGlobalDebug = debug;
 
 export function enableVerboseLogging() {
-	debugPackage.enable('astro:*,vite:*');
+	// Enable debug logging via obug's enable function
+	// obug provides the same API as debug package
+	obugEnable('astro:*,vite:*');
 	debug('cli', '--verbose flag enabled! Enabling: DEBUG="astro:*,vite:*"');
 	debug(
 		'cli',

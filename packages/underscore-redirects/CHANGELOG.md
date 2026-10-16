@@ -1,5 +1,136 @@
 # @astrojs/underscore-redirects
 
+## 1.0.4
+
+### Patch Changes
+
+- [#17620](https://github.com/withastro/astro/pull/17620) [`0891ac9`](https://github.com/withastro/astro/commit/0891ac9de5a6996e5ebd227e3443f7f4a4ea935a) Thanks [@astrobot-houston](https://github.com/astrobot-houston)! - Fixes dynamic redirect routes to honour user-configured status codes instead of hardcoding 301. Previously, a redirect configured with `{ destination: '/new', status: 302 }` would be emitted as 301 in the `_redirects` file when the route was dynamic.
+
+## 1.0.3
+
+### Patch Changes
+
+- [#16034](https://github.com/withastro/astro/pull/16034) [`814406d`](https://github.com/withastro/astro/commit/814406de7dc3ea014b47d2d886d55c45e4e1c034) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Fixes generated redirect files to respect Astro’s `trailingSlash` configuration, so redirect routes work with the expected URL format in built output instead of returning a 404 when accessed with a trailing slash.
+
+## 1.0.2
+
+### Patch Changes
+
+- [#15979](https://github.com/withastro/astro/pull/15979) [`3b8d473`](https://github.com/withastro/astro/commit/3b8d473768bf7d356a21a0a432e6a33f90928a9e) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Fixes an issue where redirects in `_redirects` file where not correctly created with trailing slashes.
+
+## 1.0.1
+
+### Patch Changes
+
+- [#15820](https://github.com/withastro/astro/pull/15820) [`e20474b`](https://github.com/withastro/astro/commit/e20474b98c6d868ed9734f7eeb7564bffe8bfd77) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Fixes broken publish
+
+## 1.0.0
+
+### Major Changes
+
+- [#13952](https://github.com/withastro/astro/pull/13952) [`de82ef2`](https://github.com/withastro/astro/commit/de82ef24540752f1a838b6b0534d80c7cebd88a3) Thanks [@ematipico](https://github.com/ematipico)! - - The type `Redirects` has been renamed to `HostRoutes`.
+  - `RouteDefinition.target` is now optional
+  - `RouteDefinition.weight` is now optional
+  - `Redirects.print` has been removed. Now you need to pass `Redirects` type to the `print` function
+
+  ```diff
+  - redirects.print()
+  + import { printAsRedirects } from "@astrojs/underscore-redirects"
+  + printAsRedirects(redirects)
+  ```
+
+### Minor Changes
+
+- [#13952](https://github.com/withastro/astro/pull/13952) [`de82ef2`](https://github.com/withastro/astro/commit/de82ef24540752f1a838b6b0534d80c7cebd88a3) Thanks [@ematipico](https://github.com/ematipico)! - Adds a new method called `createHostedRouteDefinition`, which returns a `HostRoute` type from a `IntegrationResolvedRoute`.
+
+- [#13952](https://github.com/withastro/astro/pull/13952) [`de82ef2`](https://github.com/withastro/astro/commit/de82ef24540752f1a838b6b0534d80c7cebd88a3) Thanks [@ematipico](https://github.com/ematipico)! - Adds a new method called `printAsRedirects` to print `HostRoutes` as redirects for the `_redirects` file.
+
+## 0.6.1
+
+### Patch Changes
+
+- [#13591](https://github.com/withastro/astro/pull/13591) [`5dd2d3f`](https://github.com/withastro/astro/commit/5dd2d3fde8a138ed611dedf39ffa5dfeeed315f8) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Removes unused code
+
+## 0.6.0
+
+### Minor Changes
+
+- [#12924](https://github.com/withastro/astro/pull/12924) [`3caa337`](https://github.com/withastro/astro/commit/3caa337f0ba917ad677fd8438b7045abc5d29e1c) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates how the output is determined in `createRedirectsFromAstroRoutes`. Since `v0.5.0`, the output would use the `buildOutput` property and `config.output` as a fallback. It no longer uses this fallback.
+
+- [#12924](https://github.com/withastro/astro/pull/12924) [`3caa337`](https://github.com/withastro/astro/commit/3caa337f0ba917ad677fd8438b7045abc5d29e1c) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates the input requirements of `createRedirectsFromAstroRoutes`:
+  - `routeToDynamicTargetMap` keys are `IntegrationResolvedRoute` instead of `IntegrationRouteData` (obtained from the `astro:routes:resolved` hook)
+  - There's a new `assets` property, that can be obtained from the `astro:build:done` hook
+
+  ```js
+  function myIntegration() {
+    let routes;
+    let buildOutput;
+    let config;
+
+    return {
+      name: 'my-integration',
+      hooks: {
+        'astro:routes:resolved': (params) => {
+          routes = params.routes;
+        },
+        'astro:config:done': (params) => {
+          buildOutput = params.buildOutput;
+          config = params.config;
+        },
+        'astro:build:done': (params) => {
+          const redirects = createRedirectsFromAstroRoutes({
+            config,
+            buildOutput,
+            routeToDynamicTargetMap: new Map(routes.map((route) => [route, ''])),
+            dir: params.dir,
+            assets: params.assets,
+          });
+        },
+      },
+    };
+  }
+  ```
+
+## 0.5.1
+
+### Patch Changes
+
+- [#12904](https://github.com/withastro/astro/pull/12904) [`7fdbd43`](https://github.com/withastro/astro/commit/7fdbd4384dea186b9bbc2c6b130e8aba2a2c1e89) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Fixes the type of `force`
+
+## 0.5.0
+
+### Minor Changes
+
+- [#12768](https://github.com/withastro/astro/pull/12768) [`524c855`](https://github.com/withastro/astro/commit/524c855075bb75696500445fdc31cb2c69b09627) Thanks [@ematipico](https://github.com/ematipico)! - Adds a new `buildOutput` property to the API `createRedirectsFromAstroRoutes`
+
+## 0.4.0
+
+### Minor Changes
+
+- [#12008](https://github.com/withastro/astro/pull/12008) [`5608338`](https://github.com/withastro/astro/commit/560833843c6d3ce2b6c6c473ec4ae70e744bf255) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Welcome to the Astro 5 beta! This release has no changes from the latest alpha of this package, but it does bring us one step closer to the final, stable release.
+
+  Starting from this release, no breaking changes will be introduced unless absolutely necessary.
+
+  To learn how to upgrade, check out the [Astro v5.0 upgrade guide in our beta docs site](https://5-0-0-beta.docs.astro.build/en/guides/upgrade-to/v5/).
+
+- [#11989](https://github.com/withastro/astro/pull/11989) [`3e70853`](https://github.com/withastro/astro/commit/3e70853b767b124bf867072b1c67474dd0b51c3f) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates the type from `RouteData` to `IntegrationRouteData`
+
+## 0.4.0-beta.1
+
+### Minor Changes
+
+- [#12008](https://github.com/withastro/astro/pull/12008) [`5608338`](https://github.com/withastro/astro/commit/560833843c6d3ce2b6c6c473ec4ae70e744bf255) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Welcome to the Astro 5 beta! This release has no changes from the latest alpha of this package, but it does bring us one step closer to the final, stable release.
+
+  Starting from this release, no breaking changes will be introduced unless absolutely necessary.
+
+  To learn how to upgrade, check out the [Astro v5.0 upgrade guide in our beta docs site](https://5-0-0-beta.docs.astro.build/en/guides/upgrade-to/v5/).
+
+## 0.4.0-alpha.0
+
+### Minor Changes
+
+- [#11989](https://github.com/withastro/astro/pull/11989) [`3e70853`](https://github.com/withastro/astro/commit/3e70853b767b124bf867072b1c67474dd0b51c3f) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates the type from `RouteData` to `IntegrationRouteData`
+
 ## 0.3.4
 
 ### Patch Changes

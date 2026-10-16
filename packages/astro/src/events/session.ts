@@ -1,5 +1,7 @@
-import type { AstroIntegration, AstroUserConfig } from '../@types/astro.js';
-import { AstroConfigSchema } from '../core/config/schema.js';
+import { detectAgenticEnvironment } from 'am-i-vibing';
+import { AstroConfigSchema } from '../core/config/schemas/index.js';
+import type { AstroUserConfig } from '../types/public/config.js';
+import type { AstroIntegration } from '../types/public/integrations.js';
 
 const EVENT_SESSION = 'ASTRO_CLI_SESSION_STARTED';
 
@@ -9,6 +11,14 @@ interface EventPayload {
 	configKeys?: string[];
 	flags?: string[];
 	optionalIntegrations?: number;
+	/** Whether the CLI session was run by an AI coding agent. */
+	isAgentic?: boolean;
+	/** ID of the detected agent, e.g. "cursor-agent", "claude-code". */
+	agentId?: string;
+	/** Display name of the detected agent, e.g. "Cursor Agent", "Claude Code". */
+	agentName?: string;
+	/** Type of agentic environment: "agent", "interactive", or "hybrid". */
+	agentType?: string;
 }
 
 type ConfigInfoValue = string | boolean | string[] | undefined;
@@ -16,7 +26,7 @@ type ConfigInfoRecord = Record<string, ConfigInfoValue>;
 type ConfigInfoBase = {
 	[alias in keyof AstroUserConfig]: ConfigInfoValue | ConfigInfoRecord;
 };
-export interface ConfigInfo extends ConfigInfoBase {
+interface ConfigInfo extends ConfigInfoBase {
 	build: ConfigInfoRecord;
 	image: ConfigInfoRecord;
 	markdown: ConfigInfoRecord;
@@ -106,7 +116,10 @@ function createAnonymousConfigInfo(userConfig: AstroUserConfig) {
 	};
 	// Measure string literal/enum configuration values
 	configInfo.build.format = measureStringLiteral(userConfig.build?.format);
-	configInfo.markdown.syntaxHighlight = measureStringLiteral(userConfig.markdown?.syntaxHighlight);
+	const syntaxHighlight = userConfig.markdown?.syntaxHighlight;
+	const syntaxHighlightType =
+		typeof syntaxHighlight === 'object' ? syntaxHighlight.type : syntaxHighlight;
+	configInfo.markdown.syntaxHighlight = measureStringLiteral(syntaxHighlightType);
 	configInfo.output = measureStringLiteral(userConfig.output);
 	configInfo.scopedStyleStrategy = measureStringLiteral(userConfig.scopedStyleStrategy);
 	configInfo.trailingSlash = measureStringLiteral(userConfig.trailingSlash);
@@ -126,12 +139,26 @@ export function eventCliSession(
 	flags?: Record<string, any>,
 ): { eventName: string; payload: EventPayload }[] {
 	// Filter out yargs default `_` flag which is the cli command
-	const cliFlags = flags ? Object.keys(flags).filter((name) => name != '_') : undefined;
+	const cliFlags = flags ? Object.keys(flags).filter((name) => name !== '_') : undefined;
 
 	const payload: EventPayload = {
 		cliCommand,
 		config: createAnonymousConfigInfo(userConfig),
 		flags: cliFlags,
 	};
+
+	// Detect AI coding agent environment
+	try {
+		const agentInfo = detectAgenticEnvironment();
+		if (agentInfo.isAgentic) {
+			payload.isAgentic = true;
+			if (agentInfo.id) payload.agentId = agentInfo.id;
+			if (agentInfo.name) payload.agentName = agentInfo.name;
+			if (agentInfo.type) payload.agentType = agentInfo.type;
+		}
+	} catch {
+		// Detection failure should never block telemetry
+	}
+
 	return [{ eventName: EVENT_SESSION, payload }];
 }

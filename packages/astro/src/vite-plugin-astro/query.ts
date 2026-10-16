@@ -1,13 +1,15 @@
-export interface AstroQuery {
+interface AstroQuery {
 	astro?: boolean;
 	src?: boolean;
 	type?: 'script' | 'template' | 'style' | 'custom';
 	index?: number;
 	lang?: string;
 	raw?: boolean;
+	inline?: boolean;
+	container?: boolean;
 }
 
-export interface ParsedRequestResult {
+interface ParsedRequestResult {
 	filename: string;
 	query: AstroQuery;
 }
@@ -29,6 +31,12 @@ export function parseAstroRequest(id: string): ParsedRequestResult {
 	}
 	if (query.raw != null) {
 		query.raw = true;
+	}
+	if (query.inline != null) {
+		query.inline = true;
+	}
+	if (query.container != null) {
+		query.container = true;
 	}
 	return {
 		filename,

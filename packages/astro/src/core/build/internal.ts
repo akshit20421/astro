@@ -1,8 +1,7 @@
-import type { Rollup } from 'vite';
-import type { RouteData, SSRResult } from '../../@types/astro.js';
+import type { SSRResult } from '../../types/public/internal.js';
+import type { AstroEnvironmentNames } from '../constants.js';
 import { prependForwardSlash, removeFileExtension } from '../path.js';
 import { viteID } from '../util.js';
-import { makePageDataKey } from './plugins/util.js';
 import type { PageBuildData, StylesheetAsset, ViteID } from './types.js';
 
 export interface BuildInternals {
@@ -15,21 +14,34 @@ export interface BuildInternals {
 	 */
 	cssModuleToChunkIdMap: Map<string, string>;
 
-	// A mapping of hoisted script ids back to the exact hoisted scripts it references
-	hoistedScriptIdToHoistedMap: Map<string, Set<string>>;
-	// A mapping of hoisted script ids back to the pages which reference it
-	hoistedScriptIdToPagesMap: Map<string, Set<string>>;
+	/**
+	 * Maps a key describing the exact set of CSS modules bundled into a chunk of the
+	 * prerender environment to the CSS asset filename emitted for that chunk. The SSR
+	 * environment renames its own CSS assets to these filenames when they are backed by
+	 * the same CSS source modules, so the prerender and server builds don't emit
+	 * duplicate stylesheets for shared layouts (#17298).
+	 */
+	prerenderCssAssetByModuleKey: Map<string, string>;
 
 	/**
-	 * Used by the `directRenderScript` option. If script is inlined, its id and
-	 * inlined code is mapped here. The resolved id is an URL like "/_astro/something.js"
-	 * but will no longer exist as the content is now inlined in this map.
+	 * If script is inlined, its id and inlined code is mapped here. The resolved id is
+	 * an URL like "/_astro/something.js" but will no longer exist as the content is now
+	 * inlined in this map.
 	 */
 	inlinedScripts: Map<string, string>;
 
 	// A mapping of specifiers like astro/client/idle.js to the hashed bundled name.
 	// Used to render pages with the correct specifiers.
 	entrySpecifierToBundleMap: Map<string, string>;
+
+	/**
+	 * Specifiers written to `entrySpecifierToBundleMap` by the prerender environment
+	 * that have not been overwritten by the SSR or client environments. These point
+	 * to chunk files inside the prerender output directory, which is deleted after
+	 * page generation. They must be stripped from the SSR manifest to avoid dangling
+	 * references.
+	 */
+	prerenderOnlyEntrySpecifiers: Set<string>;
 
 	/**
 	 * A map for page-specific information.
@@ -52,6 +64,11 @@ export interface BuildInternals {
 	pagesByScriptId: Map<string, Set<PageBuildData>>;
 
 	/**
+	 * A map for page-specific information by a hydrated component
+	 */
+	pagesByHydratedComponent: Map<string, Set<PageBuildData>>;
+
+	/**
 	 * A map of hydrated components to export names that are discovered during the SSR build.
 	 * These will be used as the top-level entrypoints for the client build.
 	 *
@@ -72,40 +89,83 @@ export interface BuildInternals {
 	 */
 	discoveredClientOnlyComponents: Map<string, string[]>;
 	/**
-	 * A list of hoisted scripts that are discovered during the SSR build
+	 * A list of scripts that are discovered during the SSR build.
 	 * These will be used as the top-level entrypoints for the client build.
 	 */
 	discoveredScripts: Set<string>;
-
-	cachedClientEntries: string[];
-	cacheManifestUsed: boolean;
 
 	/**
 	 * Map of propagated module ids (usually something like `/Users/...blog.mdx?astroPropagatedAssets`)
 	 * to a set of stylesheets that it uses.
 	 */
 	propagatedStylesMap: Map<string, Set<StylesheetAsset>>;
-	/**
-	 * Map of propagated module ids (usually something like `/Users/...blog.mdx?astroPropagatedAssets`)
-	 * to a set of hoisted scripts that it uses.
-	 */
-	propagatedScriptsMap: Map<string, Set<string>>;
 
 	// A list of all static files created during the build. Used for SSR.
 	staticFiles: Set<string>;
-	// The SSR entry chunk. Kept in internals to share between ssr/client build steps
-	ssrEntryChunk?: Rollup.OutputChunk;
-	// The SSR manifest entry chunk.
-	manifestEntryChunk?: Rollup.OutputChunk;
+
+	// A list of all static chunks and assets that are built in the client
+	clientChunksAndAssets: Set<string>;
+
+	// All of the input modules for the client.
+	clientInput: Set<string>;
+
 	manifestFileName?: string;
-	entryPoints: Map<RouteData, URL>;
+	prerenderEntryFileName?: string;
 	componentMetadata: SSRResult['componentMetadata'];
-	middlewareEntryPoint?: URL;
+	middlewareEntryPoint: URL | undefined;
+	loggerEntryPoint: URL | undefined;
+	astroActionsEntryPoint: URL | undefined;
 
 	/**
-	 * Chunks in the bundle that are only used in prerendering that we can delete later
+	 * Assets that need to be moved from SSR/prerender directories to the client directory.
+	 * Populated during generateBundle by vitePluginSSRAssets.
+	 * Map of environment name -> Set of asset filenames.
 	 */
-	prerenderOnlyChunks: Rollup.OutputChunk[];
+	ssrAssetsPerEnvironment: Map<AstroEnvironmentNames, Set<string>>;
+
+	/**
+	 * Chunks extracted during build that need post-build injection (manifest, content).
+	 * Populated by top-level buildApp, consumed by post plugin.
+	 */
+	extractedChunks?: Array<{
+		fileName: string;
+		code: string;
+		moduleIds: string[];
+		prerender: boolean;
+	}>;
+
+	/**
+	 * Component exports that were rendered during the SSR build.
+	 * Used by the client build's cssScopeTo recovery to distinguish between
+	 * CSS that was tree-shaken because the component wasn't rendered in SSR
+	 * vs CSS that was included in SSR.
+	 */
+	ssrRenderedExports?: Map<string, Set<string>>;
+
+	/**
+	 * Map of page component path -> dependency hash for incremental builds.
+	 * Populated during the prerender Rolldown build by the incremental plugin.
+	 */
+	pageDependencyHashes?: Map<string, string>;
+
+	/**
+	 * Map of content entry root-relative `filePath` -> render-graph hash for
+	 * incremental builds. Keyed to match what the content runtime reports when it
+	 * renders an entry, so a path's cache entry can be invalidated when a component
+	 * imported by the content it renders changes.
+	 */
+	contentEntryRenderHashes?: Map<string, string>;
+
+	/**
+	 * Set of page component paths whose render graph contains a server island.
+	 * Populated during the prerender Rolldown build by the incremental plugin.
+	 * Such pages bake key-bound ciphertext into their HTML, so the incremental
+	 * cache only reuses them while the encryption key is unchanged.
+	 */
+	serverIslandPageComponents?: Set<string>;
+
+	/** Images kept in the output even without a transform. */
+	referencedImages?: ReadonlySet<string>;
 }
 
 /**
@@ -113,36 +173,51 @@ export interface BuildInternals {
  * @returns {BuildInternals}
  */
 export function createBuildInternals(): BuildInternals {
-	// These are for tracking hoisted script bundling
-	const hoistedScriptIdToHoistedMap = new Map<string, Set<string>>();
-
-	// This tracks hoistedScriptId => page components
-	const hoistedScriptIdToPagesMap = new Map<string, Set<string>>();
-
 	return {
-		cachedClientEntries: [],
+		clientInput: new Set(),
 		cssModuleToChunkIdMap: new Map(),
-		hoistedScriptIdToHoistedMap,
-		hoistedScriptIdToPagesMap,
+		prerenderCssAssetByModuleKey: new Map(),
 		inlinedScripts: new Map(),
 		entrySpecifierToBundleMap: new Map<string, string>(),
+		prerenderOnlyEntrySpecifiers: new Set<string>(),
 		pagesByKeys: new Map(),
 		pagesByViteID: new Map(),
 		pagesByClientOnly: new Map(),
 		pagesByScriptId: new Map(),
-
+		pagesByHydratedComponent: new Map(),
 		propagatedStylesMap: new Map(),
-		propagatedScriptsMap: new Map(),
-
 		discoveredHydratedComponents: new Map(),
 		discoveredClientOnlyComponents: new Map(),
 		discoveredScripts: new Set(),
 		staticFiles: new Set(),
 		componentMetadata: new Map(),
-		entryPoints: new Map(),
-		cacheManifestUsed: false,
-		prerenderOnlyChunks: [],
+		astroActionsEntryPoint: undefined,
+		middlewareEntryPoint: undefined,
+		loggerEntryPoint: undefined,
+		clientChunksAndAssets: new Set(),
+		ssrAssetsPerEnvironment: new Map(),
 	};
+}
+
+/**
+ * Gets or creates the set of SSR assets for a given environment.
+ * Handles type casting from Vite's string environment name to AstroEnvironmentNames.
+ */
+export function getOrCreateSSRAssets(internals: BuildInternals, envName: string): Set<string> {
+	const key = envName as AstroEnvironmentNames;
+	let assets = internals.ssrAssetsPerEnvironment.get(key);
+	if (!assets) {
+		assets = new Set();
+		internals.ssrAssetsPerEnvironment.set(key, assets);
+	}
+	return assets;
+}
+
+/**
+ * Gets the set of SSR assets for a given environment, or an empty set if none exist.
+ */
+export function getSSRAssets(internals: BuildInternals, envName: string): Set<string> {
+	return internals.ssrAssetsPerEnvironment.get(envName as AstroEnvironmentNames) ?? new Set();
 }
 
 export function trackPageData(
@@ -179,7 +254,7 @@ export function trackClientOnlyPageDatas(
 }
 
 /**
- * Tracks scripts to the pages they are associated with. (experimental.directRenderScript)
+ * Tracks scripts to the pages they are associated with.
  */
 export function trackScriptPageDatas(
 	internals: BuildInternals,
@@ -193,6 +268,26 @@ export function trackScriptPageDatas(
 		} else {
 			pageDataSet = new Set<PageBuildData>();
 			internals.pagesByScriptId.set(scriptId, pageDataSet);
+		}
+		pageDataSet.add(pageData);
+	}
+}
+
+/**
+ * Tracks hydrated components to the pages they are associated with.
+ */
+export function trackHydratedComponentPageDatas(
+	internals: BuildInternals,
+	pageData: PageBuildData,
+	hydratedComponents: string[],
+) {
+	for (const hydratedComponent of hydratedComponents) {
+		let pageDataSet: Set<PageBuildData>;
+		if (internals.pagesByHydratedComponent.has(hydratedComponent)) {
+			pageDataSet = internals.pagesByHydratedComponent.get(hydratedComponent)!;
+		} else {
+			pageDataSet = new Set<PageBuildData>();
+			internals.pagesByHydratedComponent.set(hydratedComponent, pageDataSet);
 		}
 		pageDataSet.add(pageData);
 	}
@@ -229,78 +324,6 @@ export function* getPageDatasByClientOnlyID(
 	}
 }
 
-/**
- * From its route and component, get the page data from the build internals.
- * @param internals Build Internals with all the pages
- * @param route The route of the page, used to identify the page
- * @param component The component of the page, used to identify the page
- */
-export function getPageData(
-	internals: BuildInternals,
-	route: string,
-	component: string,
-): PageBuildData | undefined {
-	let pageData = internals.pagesByKeys.get(makePageDataKey(route, component));
-	if (pageData) {
-		return pageData;
-	}
-	return undefined;
-}
-
-/**
- * Get all pages datas from the build internals, using a specific component.
- * @param internals Build Internals with all the pages
- * @param component path to the component, used to identify related pages
- */
-function getPagesDatasByComponent(internals: BuildInternals, component: string): PageBuildData[] {
-	const pageDatas: PageBuildData[] = [];
-	internals.pagesByKeys.forEach((pageData) => {
-		if (component === pageData.component) pageDatas.push(pageData);
-	});
-	return pageDatas;
-}
-
-// TODO: Should be removed in the future. (Astro 5?)
-/**
- * Map internals.pagesByKeys to a new map with the public key instead of the internal key.
- * This function is only used to avoid breaking changes in the Integrations API, after we changed the way
- * we identify pages, from the entrypoint component to an internal key.
- * If the page component is unique -> the public key is the component path. (old behavior)
- * If the page component is shared -> the public key is the internal key. (new behavior)
- * The new behavior on shared entrypoint it's not a breaking change, because it was not supported before.
- * @param pagesByKeys A map of all page data by their internal key
- */
-export function getPageDatasWithPublicKey(
-	pagesByKeys: Map<string, PageBuildData>,
-): Map<string, PageBuildData> {
-	// Create a map to store the pages with the public key, mimicking internal.pagesByKeys
-	const pagesWithPublicKey = new Map<string, PageBuildData>();
-
-	const pagesByComponentsArray = Array.from(pagesByKeys.values()).map((pageData) => {
-		return { component: pageData.component, pageData: pageData };
-	});
-
-	// Get pages with unique component, and set the public key to the component.
-	const pagesWithUniqueComponent = pagesByComponentsArray.filter((page) => {
-		return pagesByComponentsArray.filter((p) => p.component === page.component).length === 1;
-	});
-
-	pagesWithUniqueComponent.forEach((page) => {
-		pagesWithPublicKey.set(page.component, page.pageData);
-	});
-
-	// Get pages with shared component, and set the public key to the internal key.
-	const pagesWithSharedComponent = pagesByComponentsArray.filter((page) => {
-		return pagesByComponentsArray.filter((p) => p.component === page.component).length > 1;
-	});
-
-	pagesWithSharedComponent.forEach((page) => {
-		pagesWithPublicKey.set(page.pageData.key, page.pageData);
-	});
-
-	return pagesWithPublicKey;
-}
-
 export function getPageDataByViteID(
 	internals: BuildInternals,
 	viteid: ViteID,
@@ -318,77 +341,4 @@ export function hasPrerenderedPages(internals: BuildInternals) {
 		}
 	}
 	return false;
-}
-
-interface OrderInfo {
-	depth: number;
-	order: number;
-}
-
-/**
- * Sort a page's CSS by depth. A higher depth means that the CSS comes from shared subcomponents.
- * A lower depth means it comes directly from the top-level page.
- * Can be used to sort stylesheets so that shared rules come first
- * and page-specific rules come after.
- */
-export function cssOrder(a: OrderInfo, b: OrderInfo) {
-	let depthA = a.depth,
-		depthB = b.depth,
-		orderA = a.order,
-		orderB = b.order;
-
-	if (orderA === -1 && orderB >= 0) {
-		return 1;
-	} else if (orderB === -1 && orderA >= 0) {
-		return -1;
-	} else if (orderA > orderB) {
-		return 1;
-	} else if (orderA < orderB) {
-		return -1;
-	} else {
-		if (depthA === -1) {
-			return -1;
-		} else if (depthB === -1) {
-			return 1;
-		} else {
-			return depthA > depthB ? -1 : 1;
-		}
-	}
-}
-
-export function mergeInlineCss(
-	acc: Array<StylesheetAsset>,
-	current: StylesheetAsset,
-): Array<StylesheetAsset> {
-	const lastAdded = acc.at(acc.length - 1);
-	const lastWasInline = lastAdded?.type === 'inline';
-	const currentIsInline = current?.type === 'inline';
-	if (lastWasInline && currentIsInline) {
-		const merged = { type: 'inline' as const, content: lastAdded.content + current.content };
-		acc[acc.length - 1] = merged;
-		return acc;
-	}
-	acc.push(current);
-	return acc;
-}
-
-/**
- * Get all pages data from the build internals, using a specific hoisted script id.
- * @param internals Build Internals with all the pages
- * @param id Hoisted script id, used to identify the pages using it
- */
-export function getPageDatasByHoistedScriptId(
-	internals: BuildInternals,
-	id: string,
-): PageBuildData[] {
-	const set = internals.hoistedScriptIdToPagesMap.get(id);
-	const pageDatas: PageBuildData[] = [];
-	if (set) {
-		for (const pageId of set) {
-			getPagesDatasByComponent(internals, pageId.slice(1)).forEach((pageData) => {
-				pageDatas.push(pageData);
-			});
-		}
-	}
-	return pageDatas;
 }

@@ -1,5 +1,5 @@
-import type { AstroComponentMetadata } from '../../@types/astro.js';
 import type { ValueOf } from '../../type-utils.js';
+import type { AstroComponentMetadata } from '../../types/public/internal.js';
 
 const PROP_TYPE = {
 	Value: 0,
@@ -95,10 +95,10 @@ function convertToSerializedForm(
 			if (value !== null && typeof value === 'object') {
 				return [PROP_TYPE.Value, serializeObject(value, metadata, parents)];
 			}
-			if (value === Infinity) {
+			if (value === Number.POSITIVE_INFINITY) {
 				return [PROP_TYPE.Infinity, 1];
 			}
-			if (value === -Infinity) {
+			if (value === Number.NEGATIVE_INFINITY) {
 				return [PROP_TYPE.Infinity, -1];
 			}
 			if (value === undefined) {
@@ -109,7 +109,7 @@ function convertToSerializedForm(
 	}
 }
 
-export function serializeProps(props: any, metadata: AstroComponentMetadata) {
+export function serializeProps(props: any, metadata?: AstroComponentMetadata) {
 	const serialized = JSON.stringify(serializeObject(props, metadata));
 	return serialized;
 }

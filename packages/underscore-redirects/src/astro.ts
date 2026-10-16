@@ -1,10 +1,15 @@
 import { posix } from 'node:path';
-import type { AstroConfig, RouteData, ValidRedirectStatus } from 'astro';
-import { Redirects } from './redirects.js';
+import type {
+	AstroConfig,
+	HookParameters,
+	IntegrationResolvedRoute,
+	ValidRedirectStatus,
+} from 'astro';
+import { type HostRouteDefinition, HostRoutes } from './host-route.js';
 
 const pathJoin = posix.join;
 
-function getRedirectStatus(route: RouteData): ValidRedirectStatus {
+function getRedirectStatus(route: IntegrationResolvedRoute): ValidRedirectStatus {
 	if (typeof route.redirect === 'object') {
 		return route.redirect.status;
 	}
@@ -12,12 +17,43 @@ function getRedirectStatus(route: RouteData): ValidRedirectStatus {
 }
 
 interface CreateRedirectsFromAstroRoutesParams {
-	config: Pick<AstroConfig, 'build' | 'output' | 'base'>;
+	config: Pick<AstroConfig, 'build' | 'output' | 'base' | 'trailingSlash'>;
 	/**
 	 * Maps a `RouteData` to a dynamic target
 	 */
-	routeToDynamicTargetMap: Map<RouteData, string>;
+	routeToDynamicTargetMap: Map<IntegrationResolvedRoute, string>;
 	dir: URL;
+	buildOutput: 'static' | 'server';
+	assets: HookParameters<'astro:build:done'>['assets'];
+}
+
+/**
+ * Returns the path(s) to use for a redirect entry based on the trailingSlash config.
+ * - 'always': ensures the path ends with '/'
+ * - 'never': ensures the path does not end with '/'
+ * - 'ignore'(default): returns both with and without trailing slash variants
+ */
+export function getTrailingSlashPaths(
+	inputPath: string,
+	trailingSlash: 'always' | 'never' | 'ignore',
+): string[] {
+	if (inputPath === '/') {
+		return ['/'];
+	}
+
+	const hasTrailingSlash = inputPath.endsWith('/');
+	const withoutSlash = hasTrailingSlash ? inputPath.slice(0, -1) : inputPath;
+	const withSlash = hasTrailingSlash ? inputPath : inputPath + '/';
+
+	switch (trailingSlash) {
+		case 'always':
+			return [withSlash];
+		case 'never':
+			return [withoutSlash];
+		case 'ignore':
+		default:
+			return [withoutSlash, withSlash];
+	}
 }
 
 /**
@@ -27,45 +63,61 @@ export function createRedirectsFromAstroRoutes({
 	config,
 	routeToDynamicTargetMap,
 	dir,
-}: CreateRedirectsFromAstroRoutesParams) {
+	buildOutput,
+	assets,
+}: CreateRedirectsFromAstroRoutesParams): HostRoutes {
 	const base =
 		config.base && config.base !== '/'
 			? config.base.endsWith('/')
 				? config.base.slice(0, -1)
 				: config.base
 			: '';
-	const output = config.output;
-	const _redirects = new Redirects();
+	const redirects = new HostRoutes();
 
 	for (const [route, dynamicTarget = ''] of routeToDynamicTargetMap) {
+		const distURL = assets?.get(route.pattern);
 		// A route with a `pathname` is as static route.
 		if (route.pathname) {
 			if (route.redirect) {
-				// A redirect route without dynami§c parts. Get the redirect status
+				// A redirect route without dynamic parts. Get the redirect status
 				// from the user if provided.
-				_redirects.add({
-					dynamic: false,
-					input: `${base}${route.pathname}`,
-					target: typeof route.redirect === 'object' ? route.redirect.destination : route.redirect,
-					status: getRedirectStatus(route),
-					weight: 2,
-				});
+				// For redirect routes, `entrypoint` preserves the original source path
+				// (including trailing slash) while `pathname` normalizes it away.
+				// Use `entrypoint` when available to keep trailing slashes in _redirects.
+				const inputPath =
+					route.type === 'redirect' && route.entrypoint ? route.entrypoint : route.pathname;
+
+				// Generate redirect entries based on trailingSlash config.
+				const trailingSlash = config.trailingSlash ?? 'ignore';
+				const paths = getTrailingSlashPaths(inputPath, trailingSlash);
+				for (const path of paths) {
+					redirects.add({
+						dynamic: false,
+						input: `${base}${path}`,
+						target:
+							typeof route.redirect === 'object' ? route.redirect.destination : route.redirect,
+						status: getRedirectStatus(route),
+						weight: 2,
+					});
+				}
 				continue;
 			}
 
 			// If this is a static build we don't want to add redirects to the HTML file.
-			if (output === 'static') {
+			if (buildOutput === 'static') {
 				continue;
-			} else if (route.distURL) {
-				_redirects.add({
+			}
+
+			if (distURL) {
+				redirects.add({
 					dynamic: false,
 					input: `${base}${route.pathname}`,
-					target: prependForwardSlash(route.distURL.toString().replace(dir.toString(), '')),
+					target: prependForwardSlash(distURL.toString().replace(dir.toString(), '')),
 					status: 200,
 					weight: 2,
 				});
 			} else {
-				_redirects.add({
+				redirects.add({
 					dynamic: false,
 					input: `${base}${route.pathname}`,
 					target: dynamicTarget,
@@ -73,8 +125,8 @@ export function createRedirectsFromAstroRoutes({
 					weight: 2,
 				});
 
-				if (route.route === '/404') {
-					_redirects.add({
+				if (route.pattern === '/404') {
+					redirects.add({
 						dynamic: true,
 						input: '/*',
 						target: dynamicTarget,
@@ -89,24 +141,23 @@ export function createRedirectsFromAstroRoutes({
 			const pattern = generateDynamicPattern(route);
 
 			// This route was prerendered and should be forwarded to the HTML file.
-			if (route.distURL) {
+			if (distURL) {
 				const targetRoute = route.redirectRoute ?? route;
-				const targetPattern = generateDynamicPattern(targetRoute);
-				let target = targetPattern;
+				let target = generateDynamicPattern(targetRoute);
 				if (config.build.format === 'directory') {
 					target = pathJoin(target, 'index.html');
 				} else {
 					target += '.html';
 				}
-				_redirects.add({
+				redirects.add({
 					dynamic: true,
 					input: `${base}${pattern}`,
 					target,
-					status: route.type === 'redirect' ? 301 : 200,
+					status: route.type === 'redirect' ? getRedirectStatus(route) : 200,
 					weight: 1,
 				});
 			} else {
-				_redirects.add({
+				redirects.add({
 					dynamic: true,
 					input: `${base}${pattern}`,
 					target: dynamicTarget,
@@ -117,7 +168,7 @@ export function createRedirectsFromAstroRoutes({
 		}
 	}
 
-	return _redirects;
+	return redirects;
 }
 
 /**
@@ -125,8 +176,8 @@ export function createRedirectsFromAstroRoutes({
  * /team/articles/*
  * With stars replacing spread and :id syntax replacing [id]
  */
-function generateDynamicPattern(route: RouteData) {
-	const pattern =
+function generateDynamicPattern(route: IntegrationResolvedRoute) {
+	return (
 		'/' +
 		route.segments
 			.map(([part]) => {
@@ -141,10 +192,52 @@ function generateDynamicPattern(route: RouteData) {
 					return part.content;
 				}
 			})
-			.join('/');
-	return pattern;
+			.join('/')
+	);
 }
 
 function prependForwardSlash(str: string) {
 	return str.startsWith('/') ? str : '/' + str;
+}
+
+/**
+ * Creates a hosted route definition from an `IntegrationResolveRoute`
+ * @param route
+ * @param config
+ */
+export function createHostedRouteDefinition(
+	route: IntegrationResolvedRoute,
+	config: AstroConfig,
+): HostRouteDefinition {
+	const base =
+		config.base && config.base !== '/'
+			? config.base.endsWith('/')
+				? config.base.slice(0, -1)
+				: config.base
+			: '';
+
+	if (route.pattern === '/404') {
+		return {
+			dynamic: true,
+			input: '/*',
+			status: 404,
+		};
+	}
+
+	if (route.pathname) {
+		return {
+			input: `${base}${route.pathname}`,
+			status: 200,
+			dynamic: false,
+		};
+	} else {
+		// This is the dynamic route code. This generates a pattern from a dynamic
+		// route formatted with *s in place of the Astro dynamic/spread syntax.
+		const pattern = generateDynamicPattern(route);
+		return {
+			dynamic: true,
+			input: `${base}${pattern}`,
+			status: 200,
+		};
+	}
 }

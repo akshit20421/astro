@@ -1,11 +1,11 @@
 import type { NamedSSRLoadedRendererValue } from 'astro';
 import {
-	NoHydration,
-	Suspense,
 	createComponent,
 	generateHydrationScript,
+	NoHydration,
 	renderToString,
 	renderToStringAsync,
+	Suspense,
 	ssr,
 } from 'solid-js/web';
 import { getContext, incrementId } from './context.js';
@@ -23,6 +23,12 @@ async function check(
 ) {
 	if (typeof Component !== 'function') return false;
 	if (Component.name === 'QwikComponent') return false;
+	// Svelte component renders fine by Solid as an empty string. The only way to detect
+	// if this isn't a Solid but Svelte component is to unfortunately copy the check
+	// implementation of the Svelte renderer.
+	// `$$payload` is the legacy prop name; `$$renderer` is the name used since Svelte 5.x.
+	const componentStr = Component.toString();
+	if (componentStr.includes('$$payload') || componentStr.includes('$$renderer')) return false;
 
 	// There is nothing particularly special about Solid components. Basically they are just functions.
 	// In general, components from other frameworks (eg, MDX, React, etc.) tend to render as "undefined",

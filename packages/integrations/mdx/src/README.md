@@ -64,7 +64,7 @@ Flow:
      A: No, but we'll clear that up later in step 3.
 3. For each `node` we leave, pop from `elementStack`. If the `node`'s parent is in `allPossibleElements`, we also remove the `node` from `allPossibleElements`.
    - Q: Why do we check for the node's parent? <br>
-     A: Checking for the node's parent allows us to identify a subtree root. When we enter a subtree like `C -> D -> E`, we leave in reverse: `E -> D -> C`. When we leave `E`, we see that it's parent `D` exists, so we remove `E`. When we leave `D`, we see `C` exists, so we remove `D`. When we leave `C`, we see that its parent doesn't exist, so we keep `C`, a subtree root.
+     A: Checking for the node's parent allows us to identify a subtree root. When we enter a subtree like `C -> D -> E`, we leave in reverse: `E -> D -> C`. When we leave `E`, we see that its parent `D` exists, so we remove `E`. When we leave `D`, we see `C` exists, so we remove `D`. When we leave `C`, we see that its parent doesn't exist, so we keep `C`, a subtree root.
 4. _(Returning to the code written for step 2's `node` enter handling)_ We also need to handle the case where we find non-static elements. If found, we remove all the elements in `elementStack` from `allPossibleElements`. This happens before the code in step 2.
    - Q: Why? <br>
      A: Because if the `node` isn't static, that means all its ancestors (`elementStack`) have non-static children. So, the ancestors couldn't be a subtree root to be optimized anymore.
@@ -83,11 +83,10 @@ Inputs:
 Flow:
 
 1. Before we mutate the `hast` tree, each element in `allPossibleElements` may have siblings that can be optimized together. Sibling elements are grouped with the `findElementGroups()` function, which returns an array of element groups (new variable `elementGroups`) and mutates `allPossibleElements` to remove elements that are already part of a group.
-
    - Q: How does `findElementGroups()` work? <br>
      A: For each elements in `allPossibleElements` that are non-static, we're able to take the element metadata from `elementMetadatas` and guess the next sibling node. If the next sibling node is static and is an element in `allPossibleElements`, we group them together for optimization. It continues to guess until it hits a non-static node or an element not in `allPossibleElements`, which it'll finalize the group as part of the returned result.
 
-2. For each elements in `allPossibleElements`, we serailize them as HTML and add it to the `set:html` property of the `hast` node, and remove its children.
+2. For each elements in `allPossibleElements`, we serialize them as HTML and add it to the `set:html` property of the `hast` node, and remove its children.
 3. For each element group in `elementGroups`, we serialize the group children as HTML and add it to a new `<Fragment set:html="..." />` node, and replace the group children with the new `<Fragment />` node.
 4. 🎉 The rest of the MDX pipeline will do its thing and generate the desired JSX like above.
 

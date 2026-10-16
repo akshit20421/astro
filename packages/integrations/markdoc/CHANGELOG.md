@@ -1,5 +1,699 @@
 # @astrojs/markdoc
 
+## 2.1.0
+
+### Minor Changes
+
+- [#18177](https://github.com/withastro/astro/pull/18177) [`7d814e5`](https://github.com/withastro/astro/commit/7d814e5ac3e7c84b4e4fd4e6c7cc6820f553742c) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Updates image handling for Astro 7.4. Requires `astro@^7.4.0`
+
+- [#18277](https://github.com/withastro/astro/pull/18277) [`2715958`](https://github.com/withastro/astro/commit/2715958666b0a706b069d0592da3a070b3796a9b) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases the minimum Node.js version to 22.22.0
+  
+  The minimum supported Node.js version is now 22.22.0, the latest Node.js 22 release supported by StackBlitz. This change is in line with Astro's [Node.js support policy](https://docs.astro.build/en/upgrade-astro/#support).
+
+### Patch Changes
+
+- Updated dependencies [[`b7a1bd9`](https://github.com/withastro/astro/commit/b7a1bd99ac7c68cf36078058f15f1bd1fab4cbe8), [`2715958`](https://github.com/withastro/astro/commit/2715958666b0a706b069d0592da3a070b3796a9b)]:
+  - @astrojs/internal-helpers@0.13.0
+  - @astrojs/prism@4.1.0
+
+## 2.0.11
+
+### Patch Changes
+
+- [#18263](https://github.com/withastro/astro/pull/18263) [`882dd98`](https://github.com/withastro/astro/commit/882dd98cd9f11c4e7bd0b812d37f865dfca75d3d) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Refactors internal bundling and code transforms to use Vite's Oxc-based `transformWithOxc` and Rolldown instead of esbuild. These packages no longer depend on esbuild directly.
+
+## 2.0.10
+
+### Patch Changes
+
+- [#18099](https://github.com/withastro/astro/pull/18099) [`6987261`](https://github.com/withastro/astro/commit/69872618b7b7c915b2bd51a4b41e3a3e3116f3bb) Thanks [@renovate](https://github.com/apps/renovate)! - Adds YAML parsing with timestamp and merge key support, and formats YAML errors consistently across Astro, Markdown, MDX, and Markdoc.
+- Updated dependencies [[`6987261`](https://github.com/withastro/astro/commit/69872618b7b7c915b2bd51a4b41e3a3e3116f3bb), [`62b13ba`](https://github.com/withastro/astro/commit/62b13ba3e0068057a47fbfc2ab8842b263c68f0d)]:
+  - @astrojs/internal-helpers@0.12.0
+
+## 2.0.9
+
+### Patch Changes
+
+- Updated dependencies [[`f8e9458`](https://github.com/withastro/astro/commit/f8e94585ab6c38e2702ee1e2e540858f72058a40)]:
+  - @astrojs/internal-helpers@0.11.0
+
+## 2.0.8
+
+### Patch Changes
+
+- Updated dependencies [[`05763a0`](https://github.com/withastro/astro/commit/05763a0884aabb1da78a2749d5bb9d41ae620527)]:
+  - @astrojs/internal-helpers@0.10.4
+
+## 2.0.7
+
+### Patch Changes
+
+- Updated dependencies [[`8c193f6`](https://github.com/withastro/astro/commit/8c193f67cce77cf2e41fb702c88ca46f788f1277)]:
+  - @astrojs/internal-helpers@0.10.3
+
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies [[`c895b12`](https://github.com/withastro/astro/commit/c895b12b99a73f5a9f98d6699452d12c138f8a18)]:
+  - @astrojs/internal-helpers@0.10.2
+
+## 2.0.5
+
+### Patch Changes
+
+- [#17460](https://github.com/withastro/astro/pull/17460) [`3b93a1a`](https://github.com/withastro/astro/commit/3b93a1a1cce669b71729d2b946fa2d41dae79ad6) Thanks [@astrobot-houston](https://github.com/astrobot-houston)! - Fixes custom `transform` functions being dropped when a tag or node also specifies a custom `render` component. User-written transforms are now always preserved; only Markdoc's built-in transforms are removed so the custom component wins.
+
+- [#17191](https://github.com/withastro/astro/pull/17191) [`fc3fb2b`](https://github.com/withastro/astro/commit/fc3fb2bcfdd3223a6a9acfcb3b09efaa9d4a28e8) Thanks [@eldardada](https://github.com/eldardada)! - Fixes custom `transform` functions being incorrectly dropped for tags and nodes whose names require bracket access (e.g. `side-note`). The check that detects whether a transform respects a custom `render` component now recognizes bracket notation, optional chaining and whitespace, not only dot notation.
+
+## 2.0.4
+
+### Patch Changes
+
+- [#17441](https://github.com/withastro/astro/pull/17441) [`6180c8e`](https://github.com/withastro/astro/commit/6180c8e03b93942c4bdd8c3c45a0ae94906eff69) Thanks [@renovate](https://github.com/apps/renovate)! - Updates dependency htmlparser2 to v12
+
+## 2.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`eb6f97e`](https://github.com/withastro/astro/commit/eb6f97e391ee587747e37609c255c7cd4b9cce3c)]:
+  - @astrojs/internal-helpers@0.10.1
+
+## 2.0.2
+
+### Patch Changes
+
+- [#17249](https://github.com/withastro/astro/pull/17249) [`02b73b0`](https://github.com/withastro/astro/commit/02b73b0fc2e32102e788fd9031ce061337490a73) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where the `peerDependencies` field used incorrect dependencies.
+
+## 2.0.1
+
+### Patch Changes
+
+- [#17142](https://github.com/withastro/astro/pull/17142) [`973ea49`](https://github.com/withastro/astro/commit/973ea495bf27699648406f8404913c0dbf6c6bc3) Thanks [@astrobot-houston](https://github.com/astrobot-houston)! - Fixes a crash when rendering shiki-highlighted code blocks inside list items
+
+## 2.0.0
+
+### Major Changes
+
+- [#15819](https://github.com/withastro/astro/pull/15819) [`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27) Thanks [@delucis](https://github.com/delucis)! - Upgrade to Vite v8
+
+### Patch Changes
+
+- [#17027](https://github.com/withastro/astro/pull/17027) [`241250b`](https://github.com/withastro/astro/commit/241250bf126f39c86a8aedd38df106e533301752) Thanks [@ocavue](https://github.com/ocavue)! - Triggers beta prereleases for packages that are still on alpha
+
+## 2.0.0-beta.1
+
+### Patch Changes
+
+- [#17027](https://github.com/withastro/astro/pull/17027) [`241250b`](https://github.com/withastro/astro/commit/241250bf126f39c86a8aedd38df106e533301752) Thanks [@ocavue](https://github.com/ocavue)! - Triggers beta prereleases for packages that are still on alpha
+
+## 2.0.0-alpha.0
+
+### Major Changes
+
+- [#15819](https://github.com/withastro/astro/pull/15819) [`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27) Thanks [@delucis](https://github.com/delucis)! - Upgrade to Vite v8
+
+### Patch Changes
+
+- Updated dependencies [[`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27), [`cafec4e`](https://github.com/withastro/astro/commit/cafec4e23365061491103dfce2e889a15cf86f27), [`c30a778`](https://github.com/withastro/astro/commit/c30a7789a477e44826c54c8560587d09dc46a229), [`ee079d4`](https://github.com/withastro/astro/commit/ee079d4c7f143076b84d663c832911009a077c7f)]:
+  - astro@7.0.0-alpha.0
+
+## 1.0.6
+
+### Patch Changes
+
+- [#16848](https://github.com/withastro/astro/pull/16848) [`f732f3c`](https://github.com/withastro/astro/commit/f732f3cc716342a63e5b03815243ba10964b89dc) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Removes `@astrojs/markdown-remark` from `@astrojs/markdoc`'s dependencies in favour of Astro's internal markdown utilities now that Astro's Markdown support is processor agnostic.
+
+- Updated dependencies [[`f732f3c`](https://github.com/withastro/astro/commit/f732f3cc716342a63e5b03815243ba10964b89dc)]:
+  - @astrojs/internal-helpers@0.10.0
+
+## 1.0.5
+
+### Patch Changes
+
+- [#15723](https://github.com/withastro/astro/pull/15723) [`9256345`](https://github.com/withastro/astro/commit/92563452ce866d9f9b950ad4b2adc808d10e8014) Thanks [@rururux](https://github.com/rururux)! - Updates internal type usage from `@astrojs/prism`.
+
+- Updated dependencies [[`d365c97`](https://github.com/withastro/astro/commit/d365c975ba2d88fc1dbdfe698df2bf9e2eafadce), [`9256345`](https://github.com/withastro/astro/commit/92563452ce866d9f9b950ad4b2adc808d10e8014), [`9256345`](https://github.com/withastro/astro/commit/92563452ce866d9f9b950ad4b2adc808d10e8014)]:
+  - @astrojs/internal-helpers@0.9.1
+  - @astrojs/markdown-remark@7.1.2
+  - @astrojs/prism@4.0.2
+
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [[`99464ed`](https://github.com/withastro/astro/commit/99464edb5fc0968f6497328e106f26ab393668bd), [`f3485c3`](https://github.com/withastro/astro/commit/f3485c3458bc8bf70c152126e418c24f489ded9d)]:
+  - @astrojs/internal-helpers@0.9.0
+  - @astrojs/markdown-remark@7.1.1
+
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`10a1a5a`](https://github.com/withastro/astro/commit/10a1a5a5232fa401ca814b396cf79aeccdfdf8a9)]:
+  - @astrojs/markdown-remark@7.1.0
+
+## 1.0.2
+
+### Patch Changes
+
+- [#15864](https://github.com/withastro/astro/pull/15864) [`d3c7de9`](https://github.com/withastro/astro/commit/d3c7de9253e9cb31fa5c4bf9f4bdf59dd1ada7b0) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Removes temporary support for Node >=20.19.1 because Stackblitz now uses Node 22 by default
+
+- Updated dependencies [[`d3c7de9`](https://github.com/withastro/astro/commit/d3c7de9253e9cb31fa5c4bf9f4bdf59dd1ada7b0)]:
+  - @astrojs/prism@4.0.1
+  - @astrojs/markdown-remark@7.0.1
+
+## 1.0.1
+
+### Patch Changes
+
+- [#15934](https://github.com/withastro/astro/pull/15934) [`6f8f0bc`](https://github.com/withastro/astro/commit/6f8f0bc4e22e958ccc2164acb1aa8cce21c43148) Thanks [@ematipico](https://github.com/ematipico)! - Updates the Astro `peerDependencies#astro` to be `6.0.0`.
+
+## 1.0.0
+
+### Minor Changes
+
+- [#14494](https://github.com/withastro/astro/pull/14494) [`727b0a2`](https://github.com/withastro/astro/commit/727b0a205eb765f1c36f13a73dfc69e17e44df8f) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates Markdown heading ID generation - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#changed-markdown-heading-id-generation))
+
+- [#15345](https://github.com/withastro/astro/pull/15345) [`840fbf9`](https://github.com/withastro/astro/commit/840fbf9e4abc7f847e23da8d67904ffde4d95fff) Thanks [@matthewp](https://github.com/matthewp)! - Uses Astro's new `emitClientAsset` API for image emission in content collections
+
+- [#15097](https://github.com/withastro/astro/pull/15097) [`be1b9bf`](https://github.com/withastro/astro/commit/be1b9bf3f42118a903ae0081d07ed519fa91d204) Thanks [@matthewp](https://github.com/matthewp)! - Updates internal image processing to be compatible with Astro 6. This change is internal-only and does not affect the public API.
+
+  The integration now uses Astro's new `emitImageMetadata()` function instead of the removed `emitESMImage()` function for processing images referenced in Markdoc content during build time. This ensures continued compatibility with Astro's asset processing pipeline while maintaining the same behavior for users.
+
+- [#14427](https://github.com/withastro/astro/pull/14427) [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases minimum Node.js version to 22.12.0 - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#node-22))
+
+- [#14445](https://github.com/withastro/astro/pull/14445) [`ecb0b98`](https://github.com/withastro/astro/commit/ecb0b98396f639d830a99ddb5895ab9223e4dc87) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Astro v6.0 upgrades to Vite v7.0 as the development server and production bundler - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#vite-70))
+
+### Patch Changes
+
+- [#15184](https://github.com/withastro/astro/pull/15184) [`f47c071`](https://github.com/withastro/astro/commit/f47c0719b390918a7e4a18b8b91b682667426b6b) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where the package wasn't correctly published
+
+- [#15457](https://github.com/withastro/astro/pull/15457) [`6e8da44`](https://github.com/withastro/astro/commit/6e8da44efbbe5094f540c6e70a20908d65492b09) Thanks [@AhmadYasser1](https://github.com/AhmadYasser1)! - Fixes custom attributes on Markdoc's built-in `{% table %}` tag causing "Invalid attribute" validation errors.
+
+  In Markdoc, `table` exists as both a tag (`{% table %}`) and a node (the inner table structure). When users defined custom attributes on either `nodes.table` or `tags.table`, the attributes weren't synced to the counterpart, causing validation to fail on whichever side was missing the declaration.
+
+  The fix automatically syncs custom attribute declarations between tags and nodes that share the same name, so users can define attributes on either side and have them work correctly.
+
+- [#15264](https://github.com/withastro/astro/pull/15264) [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Lower the Node version requirement to allow running on Stackblitz until it supports v22
+
+- [#15335](https://github.com/withastro/astro/pull/15335) [`75931c2`](https://github.com/withastro/astro/commit/75931c2f52542dd430ed2ebd51ed8cdfb338337c) Thanks [@matthewp](https://github.com/matthewp)! - Fixes an issue where spreading a built-in Markdoc node config (e.g., `...Markdoc.nodes.fence`) and specifying a custom `render` component would not work because the built-in `transform()` function was overriding the custom component. Now, `render` wins over `transform` when both are specified.
+
+- Updated dependencies [[`bbb5811`](https://github.com/withastro/astro/commit/bbb5811eb801a42dc091bb09ea19d6cde3033795), [`bbb5811`](https://github.com/withastro/astro/commit/bbb5811eb801a42dc091bb09ea19d6cde3033795), [`4ebc1e3`](https://github.com/withastro/astro/commit/4ebc1e328ac40e892078031ed9dfecf60691fd56), [`cb99214`](https://github.com/withastro/astro/commit/cb99214ebb991d1b929978f46e1b3ae68b561366), [`80f0225`](https://github.com/withastro/astro/commit/80f022559e81b5609a69ba31c7f0d93dcb0bf74d), [`727b0a2`](https://github.com/withastro/astro/commit/727b0a205eb765f1c36f13a73dfc69e17e44df8f), [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789), [`4e7f3e8`](https://github.com/withastro/astro/commit/4e7f3e8e6849c314a0ab031ebd7f23fb982f0529), [`a164c77`](https://github.com/withastro/astro/commit/a164c77336059f2dc3e7f7fe992aa754ed145ef3), [`1fa4177`](https://github.com/withastro/astro/commit/1fa41779c458123f707940a5253dbe6e540dbf7d), [`7c55f80`](https://github.com/withastro/astro/commit/7c55f80fa1fd91f8f71ad60437f81e6c7f98f69d), [`cf6ea6b`](https://github.com/withastro/astro/commit/cf6ea6b36b67c7712395ed3f9ca19cb14ba1a013), [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf), [`6f19ecc`](https://github.com/withastro/astro/commit/6f19ecc35adfb2ddaabbba2269630f95c13f5a57), [`f94d3c5`](https://github.com/withastro/astro/commit/f94d3c5313e5a7576cf2cb316a85d68d335a188f), [`a18d727`](https://github.com/withastro/astro/commit/a18d727fc717054df85177c8e0c3d38a5252f2da), [`240c317`](https://github.com/withastro/astro/commit/240c317faab52d7f22494e9181f5d2c2c404b0bd), [`745e632`](https://github.com/withastro/astro/commit/745e632fc590e41a5701509e9cc4ed971bdddf74)]:
+  - @astrojs/markdown-remark@7.0.0
+  - @astrojs/prism@4.0.0
+  - @astrojs/internal-helpers@0.8.0
+
+## 1.0.0-beta.15
+
+### Patch Changes
+
+- Updated dependencies [[`4ebc1e3`](https://github.com/withastro/astro/commit/4ebc1e328ac40e892078031ed9dfecf60691fd56), [`4e7f3e8`](https://github.com/withastro/astro/commit/4e7f3e8e6849c314a0ab031ebd7f23fb982f0529)]:
+  - @astrojs/internal-helpers@0.8.0-beta.3
+  - @astrojs/markdown-remark@7.0.0-beta.11
+
+## 1.0.0-beta.14
+
+### Patch Changes
+
+- Updated dependencies [[`745e632`](https://github.com/withastro/astro/commit/745e632fc590e41a5701509e9cc4ed971bdddf74)]:
+  - @astrojs/internal-helpers@0.8.0-beta.2
+  - @astrojs/markdown-remark@7.0.0-beta.10
+
+## 1.0.0-beta.13
+
+### Patch Changes
+
+- Updated dependencies [[`6f19ecc`](https://github.com/withastro/astro/commit/6f19ecc35adfb2ddaabbba2269630f95c13f5a57), [`f94d3c5`](https://github.com/withastro/astro/commit/f94d3c5313e5a7576cf2cb316a85d68d335a188f)]:
+  - @astrojs/markdown-remark@7.0.0-beta.9
+
+## 1.0.0-beta.12
+
+### Patch Changes
+
+- Updated dependencies [[`1fa4177`](https://github.com/withastro/astro/commit/1fa41779c458123f707940a5253dbe6e540dbf7d)]:
+  - @astrojs/markdown-remark@7.0.0-beta.8
+
+## 1.0.0-beta.11
+
+### Patch Changes
+
+- Updated dependencies [[`84d6efd`](https://github.com/withastro/astro/commit/84d6efd9f1036fdf3c29e9b786b4a96453a607ed)]:
+  - @astrojs/markdown-remark@7.0.0-beta.7
+
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- [#15457](https://github.com/withastro/astro/pull/15457) [`6e8da44`](https://github.com/withastro/astro/commit/6e8da44efbbe5094f540c6e70a20908d65492b09) Thanks [@AhmadYasser1](https://github.com/AhmadYasser1)! - Fixes custom attributes on Markdoc's built-in `{% table %}` tag causing "Invalid attribute" validation errors.
+
+  In Markdoc, `table` exists as both a tag (`{% table %}`) and a node (the inner table structure). When users defined custom attributes on either `nodes.table` or `tags.table`, the attributes weren't synced to the counterpart, causing validation to fail on whichever side was missing the declaration.
+
+  The fix automatically syncs custom attribute declarations between tags and nodes that share the same name, so users can define attributes on either side and have them work correctly.
+
+## 1.0.0-beta.9
+
+### Minor Changes
+
+- [#15345](https://github.com/withastro/astro/pull/15345) [`840fbf9`](https://github.com/withastro/astro/commit/840fbf9e4abc7f847e23da8d67904ffde4d95fff) Thanks [@matthewp](https://github.com/matthewp)! - Uses Astro's new `emitClientAsset` API for image emission in content collections
+
+### Patch Changes
+
+- Updated dependencies [[`a164c77`](https://github.com/withastro/astro/commit/a164c77336059f2dc3e7f7fe992aa754ed145ef3), [`a18d727`](https://github.com/withastro/astro/commit/a18d727fc717054df85177c8e0c3d38a5252f2da)]:
+  - @astrojs/internal-helpers@0.8.0-beta.1
+  - @astrojs/markdown-remark@7.0.0-beta.6
+
+## 1.0.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [[`80f0225`](https://github.com/withastro/astro/commit/80f022559e81b5609a69ba31c7f0d93dcb0bf74d)]:
+  - @astrojs/markdown-remark@7.0.0-beta.5
+
+## 1.0.0-beta.7
+
+### Patch Changes
+
+- [#15335](https://github.com/withastro/astro/pull/15335) [`75931c2`](https://github.com/withastro/astro/commit/75931c2f52542dd430ed2ebd51ed8cdfb338337c) Thanks [@matthewp](https://github.com/matthewp)! - Fixes an issue where spreading a built-in Markdoc node config (e.g., `...Markdoc.nodes.fence`) and specifying a custom `render` component would not work because the built-in `transform()` function was overriding the custom component. Now, `render` wins over `transform` when both are specified.
+
+- Updated dependencies [[`240c317`](https://github.com/withastro/astro/commit/240c317faab52d7f22494e9181f5d2c2c404b0bd)]:
+  - @astrojs/internal-helpers@0.8.0-beta.0
+  - @astrojs/markdown-remark@7.0.0-beta.4
+
+## 1.0.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies [[`7c55f80`](https://github.com/withastro/astro/commit/7c55f80fa1fd91f8f71ad60437f81e6c7f98f69d)]:
+  - @astrojs/markdown-remark@7.0.0-beta.3
+
+## 1.0.0-beta.5
+
+### Patch Changes
+
+- [#15264](https://github.com/withastro/astro/pull/15264) [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Lower the Node version requirement to allow running on Stackblitz until it supports v22
+
+- Updated dependencies [[`cb99214`](https://github.com/withastro/astro/commit/cb99214ebb991d1b929978f46e1b3ae68b561366), [`11efb05`](https://github.com/withastro/astro/commit/11efb058e85cda68f9a8e8f15a2c7edafe5a4789)]:
+  - @astrojs/markdown-remark@7.0.0-beta.2
+  - @astrojs/prism@4.0.0-beta.2
+
+## 1.0.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies [[`bbb5811`](https://github.com/withastro/astro/commit/bbb5811eb801a42dc091bb09ea19d6cde3033795), [`bbb5811`](https://github.com/withastro/astro/commit/bbb5811eb801a42dc091bb09ea19d6cde3033795)]:
+  - @astrojs/markdown-remark@7.0.0-beta.1
+  - @astrojs/prism@4.0.0-beta.1
+
+## 1.0.0-beta.3
+
+### Patch Changes
+
+- [#15184](https://github.com/withastro/astro/pull/15184) [`f47c071`](https://github.com/withastro/astro/commit/f47c0719b390918a7e4a18b8b91b682667426b6b) Thanks [@ematipico](https://github.com/ematipico)! - Fixes an issue where the package wasn't correctly published
+
+## 1.0.0-beta.0
+
+### Minor Changes
+
+- [#15097](https://github.com/withastro/astro/pull/15097) [`be1b9bf`](https://github.com/withastro/astro/commit/be1b9bf3f42118a903ae0081d07ed519fa91d204) Thanks [@matthewp](https://github.com/matthewp)! - Updates internal image processing to be compatible with Astro 6. This change is internal-only and does not affect the public API.
+
+  The integration now uses Astro's new `emitImageMetadata()` function instead of the removed `emitESMImage()` function for processing images referenced in Markdoc content during build time. This ensures continued compatibility with Astro's asset processing pipeline while maintaining the same behavior for users.
+
+## 1.0.0-alpha.0
+
+### Minor Changes
+
+- [#14494](https://github.com/withastro/astro/pull/14494) [`727b0a2`](https://github.com/withastro/astro/commit/727b0a205eb765f1c36f13a73dfc69e17e44df8f) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Updates Markdown heading ID generation - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#changed-markdown-heading-id-generation))
+
+- [#14427](https://github.com/withastro/astro/pull/14427) [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Increases minimum Node.js version to 22.12.0 - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#node-22))
+
+- [#14445](https://github.com/withastro/astro/pull/14445) [`ecb0b98`](https://github.com/withastro/astro/commit/ecb0b98396f639d830a99ddb5895ab9223e4dc87) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Astro v6.0 upgrades to Vite v7.0 as the development server and production bundler - ([v6 upgrade guidance](https://docs.astro.build/en/guides/upgrade-to/v6/#vite-70))
+
+### Patch Changes
+
+- Updated dependencies [[`ece667a`](https://github.com/withastro/astro/commit/ece667a737a96c8bfea2702de7207bed0842b37c), [`861b9cc`](https://github.com/withastro/astro/commit/861b9cc770a05d9fcfcb2f1f442a3ba41e94b510), [`ece667a`](https://github.com/withastro/astro/commit/ece667a737a96c8bfea2702de7207bed0842b37c), [`9fdfd4c`](https://github.com/withastro/astro/commit/9fdfd4c620313827e65664632a9c9cb435ad07ca), [`91780cf`](https://github.com/withastro/astro/commit/91780cffa7cf97cc22694d55962710609a5475b0), [`9fdfd4c`](https://github.com/withastro/astro/commit/9fdfd4c620313827e65664632a9c9cb435ad07ca), [`b1d87ec`](https://github.com/withastro/astro/commit/b1d87ec3bc2fbe214437990e871df93909d18f62), [`049da87`](https://github.com/withastro/astro/commit/049da87cb7ce1828f3025062ce079dbf132f5b86), [`727b0a2`](https://github.com/withastro/astro/commit/727b0a205eb765f1c36f13a73dfc69e17e44df8f), [`55a1a91`](https://github.com/withastro/astro/commit/55a1a911aa4e0d38191f8cb9464ffd58f3eb7608), [`669ca5b`](https://github.com/withastro/astro/commit/669ca5b0199d9933f54c76448de9ec5a9f13c430), [`df6d2d7`](https://github.com/withastro/astro/commit/df6d2d7bbcaf6b6a327a37a6437d4adade6e2485), [`9fdfd4c`](https://github.com/withastro/astro/commit/9fdfd4c620313827e65664632a9c9cb435ad07ca), [`e131261`](https://github.com/withastro/astro/commit/e1312615b39c59ebc05d5bb905ee0960b50ad3cf), [`c69c7de`](https://github.com/withastro/astro/commit/c69c7de1ffeff29f919d97c262f245927556f875), [`666d5a7`](https://github.com/withastro/astro/commit/666d5a7ef486aa57f20f87b6cb210619dabd9c4c), [`4f11510`](https://github.com/withastro/astro/commit/4f11510c9ed932f5cb6d1075b1172909dd5db23e), [`25fe093`](https://github.com/withastro/astro/commit/25fe09396dbcda2e1008c01a982f4eb2d1f33ae6), [`9c282b5`](https://github.com/withastro/astro/commit/9c282b5e6d3f0d678bc478a863e883fa4765dd17), [`ecb0b98`](https://github.com/withastro/astro/commit/ecb0b98396f639d830a99ddb5895ab9223e4dc87), [`6f67c6e`](https://github.com/withastro/astro/commit/6f67c6eef2647ef1a1eab78a65a906ab633974bb), [`36a461b`](https://github.com/withastro/astro/commit/36a461bf3f64c467bc52aecf511cd831d238e18b), [`3bda3ce`](https://github.com/withastro/astro/commit/3bda3ce4edcb1bd1349890c6ed8110f05954c791)]:
+  - astro@6.0.0-alpha.0
+  - @astrojs/markdown-remark@7.0.0-alpha.0
+  - @astrojs/prism@4.0.0-alpha.0
+
+## 0.15.10
+
+### Patch Changes
+
+- Updated dependencies [[`d8305f8`](https://github.com/withastro/astro/commit/d8305f8abdf92db6fa505ee9c1774553ba90b7bd)]:
+  - @astrojs/markdown-remark@6.3.10
+
+## 0.15.9
+
+### Patch Changes
+
+- Updated dependencies [[`9e9c528`](https://github.com/withastro/astro/commit/9e9c528191b6f5e06db9daf6ad26b8f68016e533), [`0f75f6b`](https://github.com/withastro/astro/commit/0f75f6bc637d547e07324e956db21d9f245a3e8e)]:
+  - @astrojs/internal-helpers@0.7.5
+  - @astrojs/markdown-remark@6.3.9
+
+## 0.15.8
+
+### Patch Changes
+
+- Updated dependencies [[`b8ca69b`](https://github.com/withastro/astro/commit/b8ca69b97149becefaf89bf21853de9c905cdbb7)]:
+  - @astrojs/internal-helpers@0.7.4
+  - @astrojs/markdown-remark@6.3.8
+
+## 0.15.7
+
+### Patch Changes
+
+- Updated dependencies [[`1e2499e`](https://github.com/withastro/astro/commit/1e2499e8ea83ebfa233a18a7499e1ccf169e56f4)]:
+  - @astrojs/internal-helpers@0.7.3
+  - @astrojs/markdown-remark@6.3.7
+
+## 0.15.6
+
+### Patch Changes
+
+- [#14326](https://github.com/withastro/astro/pull/14326) [`c24a8f4`](https://github.com/withastro/astro/commit/c24a8f42a17410ea78fc2d68ff0105b931a381eb) Thanks [@jsparkdev](https://github.com/jsparkdev)! - Updates `vite` version to fix CVE
+
+## 0.15.5
+
+### Patch Changes
+
+- Updated dependencies [[`4d16de7`](https://github.com/withastro/astro/commit/4d16de7f95db5d1ec1ce88610d2a95e606e83820)]:
+  - @astrojs/internal-helpers@0.7.2
+  - @astrojs/markdown-remark@6.3.6
+
+## 0.15.4
+
+### Patch Changes
+
+- Updated dependencies [[`0567fb7`](https://github.com/withastro/astro/commit/0567fb7b50c0c452be387dd7c7264b96bedab48f)]:
+  - @astrojs/internal-helpers@0.7.1
+  - @astrojs/markdown-remark@6.3.5
+
+## 0.15.3
+
+### Patch Changes
+
+- Updated dependencies [[`f4e8889`](https://github.com/withastro/astro/commit/f4e8889c10c25aeb7650b389c35a70780d5ed172)]:
+  - @astrojs/internal-helpers@0.7.0
+  - @astrojs/markdown-remark@6.3.4
+
+## 0.15.2
+
+### Patch Changes
+
+- [#14147](https://github.com/withastro/astro/pull/14147) [`211968c`](https://github.com/withastro/astro/commit/211968ceb54964457f9a5eefa4c10a65e0f0c714) Thanks [@birtles](https://github.com/birtles)! - Recognize a custom default image node component
+
+## 0.15.1
+
+### Patch Changes
+
+- Updated dependencies [[`6bd5f75`](https://github.com/withastro/astro/commit/6bd5f75806cb4df39d9e4e9b1f2225dcfdd724b0)]:
+  - @astrojs/markdown-remark@6.3.3
+
+## 0.15.0
+
+### Minor Changes
+
+- [#13809](https://github.com/withastro/astro/pull/13809) [`3c3b492`](https://github.com/withastro/astro/commit/3c3b492375bd6a63f1fb6cede3685aff999be3c9) Thanks [@ascorbic](https://github.com/ascorbic)! - Increases minimum Node.js version to 18.20.8
+
+  Node.js 18 has now reached end-of-life and should not be used. For now, Astro will continue to support Node.js 18.20.8, which is the final LTS release of Node.js 18, as well as Node.js 20 and Node.js 22 or later. We will drop support for Node.js 18 in a future release, so we recommend upgrading to Node.js 22 as soon as possible. See Astro's [Node.js support policy](https://docs.astro.build/en/upgrade-astro/#support) for more details.
+
+  :warning: **Important note for users of Cloudflare Pages**: The current build image for Cloudflare Pages uses Node.js 18.17.1 by default, which is no longer supported by Astro. If you are using Cloudflare Pages you should [override the default Node.js version](https://developers.cloudflare.com/pages/configuration/build-image/#override-default-versions) to Node.js 22. This does not affect users of Cloudflare Workers, which uses Node.js 22 by default.
+
+### Patch Changes
+
+- Updated dependencies [[`3c3b492`](https://github.com/withastro/astro/commit/3c3b492375bd6a63f1fb6cede3685aff999be3c9)]:
+  - @astrojs/prism@3.3.0
+  - @astrojs/markdown-remark@6.3.2
+
+## 0.14.2
+
+### Patch Changes
+
+- [#13731](https://github.com/withastro/astro/pull/13731) [`c3e80c2`](https://github.com/withastro/astro/commit/c3e80c25b90c803e2798b752583a8e77cdad3146) Thanks [@jsparkdev](https://github.com/jsparkdev)! - update vite to latest version for fixing CVE
+
+## 0.14.1
+
+### Patch Changes
+
+- [#13591](https://github.com/withastro/astro/pull/13591) [`5dd2d3f`](https://github.com/withastro/astro/commit/5dd2d3fde8a138ed611dedf39ffa5dfeeed315f8) Thanks [@florian-lefebvre](https://github.com/florian-lefebvre)! - Removes unused code
+
+## 0.14.0
+
+### Minor Changes
+
+- [#13578](https://github.com/withastro/astro/pull/13578) [`406501a`](https://github.com/withastro/astro/commit/406501aeb7f314ae5c31f31a373c270e3b9ec715) Thanks [@stramel](https://github.com/stramel)! - The SVG import feature introduced behind a flag in [v5.0.0](https://github.com/withastro/astro/blob/main/packages/astro/CHANGELOG.md#500) is no longer experimental and is available for general use.
+
+  This feature allows you to import SVG files directly into your Astro project as components and inline them into your HTML.
+
+  To use this feature, import an SVG file in your Astro project, passing any common SVG attributes to the imported component.
+
+  ```astro
+  ---
+  import Logo from './path/to/svg/file.svg';
+  ---
+
+  <Logo <Logo width={64} height={64} fill="currentColor" />
+  ```
+
+  If you have been waiting for stabilization before using the SVG Components feature, you can now do so.
+
+  If you were previously using this feature, please remove the experimental flag from your Astro config:
+
+  ```diff
+  import { defineConfig } from 'astro'
+
+  export default defineConfig({
+  -  experimental: {
+  -    svg: true,
+  -  }
+  })
+  ```
+
+  Additionally, a few features that were available during the experimental stage were removed in a previous release. Please see [the v5.6.0 changelog](https://github.com/withastro/astro/blob/main/packages/astro/CHANGELOG.md#560) for details if you have not yet already updated your project code for the experimental feature accordingly.
+
+  Please see the [SVG Components guide in docs](https://docs.astro.build/en/guides/images/#svg-components) for more about this feature.
+
+## 0.13.4
+
+### Patch Changes
+
+- [#13596](https://github.com/withastro/astro/pull/13596) [`3752519`](https://github.com/withastro/astro/commit/375251966d1b28a570bff45ff0fe7e7d2fe46f72) Thanks [@jsparkdev](https://github.com/jsparkdev)! - update vite to latest version to fix CVE
+
+- [#13547](https://github.com/withastro/astro/pull/13547) [`360cb91`](https://github.com/withastro/astro/commit/360cb9199a4314f90825c5639ff4396760e9cfcc) Thanks [@jsparkdev](https://github.com/jsparkdev)! - Updates vite to the latest version
+
+## 0.13.3
+
+### Patch Changes
+
+- [#13526](https://github.com/withastro/astro/pull/13526) [`ff9d69e`](https://github.com/withastro/astro/commit/ff9d69e3443c80059c54f6296d19f66bb068ead3) Thanks [@jsparkdev](https://github.com/jsparkdev)! - update `vite` to the latest version
+
+## 0.13.2
+
+### Patch Changes
+
+- [#13505](https://github.com/withastro/astro/pull/13505) [`a98ae5b`](https://github.com/withastro/astro/commit/a98ae5b8f5c33900379012e9e253a755c0a8927e) Thanks [@ematipico](https://github.com/ematipico)! - Updates the dependency `vite` to the latest.
+
+## 0.13.1
+
+### Patch Changes
+
+- Updated dependencies [[`91c9503`](https://github.com/withastro/astro/commit/91c95034e0d0bd450170623fd8aab4b56b5b1366)]:
+  - @astrojs/markdown-remark@6.3.1
+
+## 0.13.0
+
+### Minor Changes
+
+- [#13352](https://github.com/withastro/astro/pull/13352) [`cb886dc`](https://github.com/withastro/astro/commit/cb886dcde6c28acca286a66be46228a4d4cc52e7) Thanks [@delucis](https://github.com/delucis)! - Adds support for a new `experimental.headingIdCompat` flag
+
+  By default, Astro removes a trailing `-` from the end of IDs it generates for headings ending with
+  special characters. This differs from the behavior of common Markdown processors.
+
+  You can now disable this behavior with a new configuration flag:
+
+  ```js
+  // astro.config.mjs
+  import { defineConfig } from 'astro/config';
+
+  export default defineConfig({
+    experimental: {
+      headingIdCompat: true,
+    },
+  });
+  ```
+
+  This can be useful when heading IDs and anchor links need to behave consistently across your site
+  and other platforms such as GitHub and npm.
+
+  If you are [using the `rehypeHeadingIds` plugin directly](https://docs.astro.build/en/guides/markdown-content/#heading-ids-and-plugins), you can also pass this new option:
+
+  ```js
+  // astro.config.mjs
+  import { defineConfig } from 'astro/config';
+  import { rehypeHeadingIds } from '@astrojs/markdown-remark';
+  import { otherPluginThatReliesOnHeadingIDs } from 'some/plugin/source';
+
+  export default defineConfig({
+    markdown: {
+      rehypePlugins: [
+        [rehypeHeadingIds, { experimentalHeadingIdCompat: true }],
+        otherPluginThatReliesOnHeadingIDs,
+      ],
+    },
+  });
+  ```
+
+### Patch Changes
+
+- Updated dependencies [[`cb886dc`](https://github.com/withastro/astro/commit/cb886dcde6c28acca286a66be46228a4d4cc52e7), [`a3327ff`](https://github.com/withastro/astro/commit/a3327ffbe6373228339824684eaa6f340a20a32e)]:
+  - @astrojs/markdown-remark@6.3.0
+
+## 0.12.11
+
+### Patch Changes
+
+- Updated dependencies [[`042d1de`](https://github.com/withastro/astro/commit/042d1de901fd9aa66157ce078b28bcd9786e1373)]:
+  - @astrojs/internal-helpers@0.6.1
+  - @astrojs/markdown-remark@6.2.1
+
+## 0.12.10
+
+### Patch Changes
+
+- [#13323](https://github.com/withastro/astro/pull/13323) [`80926fa`](https://github.com/withastro/astro/commit/80926fadc06492fcae55f105582b9dc8279da6b3) Thanks [@ematipico](https://github.com/ematipico)! - Updates `esbuild` and `vite` to the latest to avoid false positives audits warnings caused by `esbuild`.
+
+- Updated dependencies [[`1e11f5e`](https://github.com/withastro/astro/commit/1e11f5e8b722b179e382f3c792cd961b2b51f61b), [`1e11f5e`](https://github.com/withastro/astro/commit/1e11f5e8b722b179e382f3c792cd961b2b51f61b)]:
+  - @astrojs/internal-helpers@0.6.0
+  - @astrojs/markdown-remark@6.2.0
+
+## 0.12.9
+
+### Patch Changes
+
+- Updated dependencies [[`b71bd10`](https://github.com/withastro/astro/commit/b71bd10989c0070847cecb101afb8278d5ef7091)]:
+  - @astrojs/internal-helpers@0.5.1
+
+## 0.12.8
+
+### Patch Changes
+
+- Updated dependencies [[`5361755`](https://github.com/withastro/astro/commit/536175528dbbe75aa978d615ba2517b64bad7879), [`db252e0`](https://github.com/withastro/astro/commit/db252e0692a0addf7239bfefc0220c525d63337d)]:
+  - @astrojs/internal-helpers@0.5.0
+  - @astrojs/markdown-remark@6.1.0
+
+## 0.12.7
+
+### Patch Changes
+
+- [#13011](https://github.com/withastro/astro/pull/13011) [`cf30880`](https://github.com/withastro/astro/commit/cf3088060d45227dcb48e041c4ed5e0081d71398) Thanks [@ascorbic](https://github.com/ascorbic)! - Upgrades Vite
+
+## 0.12.6
+
+### Patch Changes
+
+- [#12361](https://github.com/withastro/astro/pull/12361) [`3d89e62`](https://github.com/withastro/astro/commit/3d89e6282235a8da45d9ddfe02bcf7ec78056941) Thanks [@LunaticMuch](https://github.com/LunaticMuch)! - Upgrades the `esbuild` version to match `vite`
+
+- [#12967](https://github.com/withastro/astro/pull/12967) [`0ef1613`](https://github.com/withastro/astro/commit/0ef1613ea36439a76965290053ccc3f8afb9f400) Thanks [@bluwy](https://github.com/bluwy)! - Fixes rendering components when the `nodes.document.render` Markdoc config is set to `null`
+
+- Updated dependencies [[`3d89e62`](https://github.com/withastro/astro/commit/3d89e6282235a8da45d9ddfe02bcf7ec78056941)]:
+  - @astrojs/markdown-remark@6.0.2
+
+## 0.12.5
+
+### Patch Changes
+
+- [#12930](https://github.com/withastro/astro/pull/12930) [`a20a4d7`](https://github.com/withastro/astro/commit/a20a4d7b8ffe3ae941b5c510b319ac6f9783aabe) Thanks [@bluwy](https://github.com/bluwy)! - Fixes rendering code blocks within if tags
+
+## 0.12.4
+
+### Patch Changes
+
+- [#12799](https://github.com/withastro/astro/pull/12799) [`739dbfb`](https://github.com/withastro/astro/commit/739dbfba4214107cf8fc40c702834dad33eed3b0) Thanks [@ascorbic](https://github.com/ascorbic)! - Upgrades Vite to pin esbuild
+
+## 0.12.3
+
+### Patch Changes
+
+- [#12694](https://github.com/withastro/astro/pull/12694) [`495f46b`](https://github.com/withastro/astro/commit/495f46bca78665732e51c629d93a68fa392b88a4) Thanks [@ematipico](https://github.com/ematipico)! - Fixes a bug where the experimental feature `experimental.svg` was incorrectly used when generating ESM images
+
+## 0.12.2
+
+### Patch Changes
+
+- Updated dependencies [[`f13417b`](https://github.com/withastro/astro/commit/f13417bfbf73130c224752379e2da33084f89554), [`87231b1`](https://github.com/withastro/astro/commit/87231b1168da66bb593f681206c42fa555dfcabc), [`a71e9b9`](https://github.com/withastro/astro/commit/a71e9b93b317edc0ded49d4d50f1b7841c8cd428)]:
+  - @astrojs/markdown-remark@6.0.1
+
+## 0.12.1
+
+### Patch Changes
+
+- [#12594](https://github.com/withastro/astro/pull/12594) [`4f2fd0a`](https://github.com/withastro/astro/commit/4f2fd0a0d67a748af8b611b9afc7d4c789f7c8cc) Thanks [@Princesseuh](https://github.com/Princesseuh)! - Fixes compatibility with Astro 5
+
+## 0.12.0
+
+### Minor Changes
+
+- [#12539](https://github.com/withastro/astro/pull/12539) [`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7) Thanks [@bluwy](https://github.com/bluwy)! - Drops node 21 support
+
+### Patch Changes
+
+- [#11825](https://github.com/withastro/astro/pull/11825) [`560ef15`](https://github.com/withastro/astro/commit/560ef15ad23bd137b56ef1048eb2df548b99fdce) Thanks [@bluwy](https://github.com/bluwy)! - Uses latest version of `@astrojs/markdown-remark` with updated Shiki APIs
+
+- [#12075](https://github.com/withastro/astro/pull/12075) [`a19530e`](https://github.com/withastro/astro/commit/a19530e377b7d7afad58a33b23c0a5df1c376819) Thanks [@bluwy](https://github.com/bluwy)! - Parses frontmatter ourselves
+
+- [#12584](https://github.com/withastro/astro/pull/12584) [`fa07002`](https://github.com/withastro/astro/commit/fa07002352147d45da193f28fd6e02d2d42dc67a) Thanks [@ascorbic](https://github.com/ascorbic)! - Correctly renders boolean HTML attributes
+
+- Updated dependencies [[`3ab3b4e`](https://github.com/withastro/astro/commit/3ab3b4efbcdd2aabea5f949deedf51a5acefae59), [`5608338`](https://github.com/withastro/astro/commit/560833843c6d3ce2b6c6c473ec4ae70e744bf255), [`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7), [`560ef15`](https://github.com/withastro/astro/commit/560ef15ad23bd137b56ef1048eb2df548b99fdce), [`83a2a64`](https://github.com/withastro/astro/commit/83a2a648418ad30f4eb781d1c1b5f2d8a8ac846e), [`3ab3b4e`](https://github.com/withastro/astro/commit/3ab3b4efbcdd2aabea5f949deedf51a5acefae59), [`a19530e`](https://github.com/withastro/astro/commit/a19530e377b7d7afad58a33b23c0a5df1c376819), [`1dc8f5e`](https://github.com/withastro/astro/commit/1dc8f5eb7c515c89aadc85cfa0a300d4f65e8671)]:
+  - @astrojs/markdown-remark@6.0.0
+  - @astrojs/prism@3.2.0
+  - @astrojs/internal-helpers@0.4.2
+
+## 0.12.0-beta.1
+
+### Minor Changes
+
+- [#12539](https://github.com/withastro/astro/pull/12539) [`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7) Thanks [@bluwy](https://github.com/bluwy)! - Drops node 21 support
+
+### Patch Changes
+
+- Updated dependencies [[`827093e`](https://github.com/withastro/astro/commit/827093e6175549771f9d93ddf3f2be4c2c60f0b7)]:
+  - @astrojs/prism@3.2.0-beta.0
+  - @astrojs/markdown-remark@6.0.0-beta.3
+
+## 0.11.5-beta.1
+
+### Patch Changes
+
+- [#12075](https://github.com/withastro/astro/pull/12075) [`a19530e`](https://github.com/withastro/astro/commit/a19530e377b7d7afad58a33b23c0a5df1c376819) Thanks [@bluwy](https://github.com/bluwy)! - Parses frontmatter ourselves
+
+- Updated dependencies [[`a19530e`](https://github.com/withastro/astro/commit/a19530e377b7d7afad58a33b23c0a5df1c376819)]:
+  - @astrojs/markdown-remark@6.0.0-beta.2
+
+## 0.11.5-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`5608338`](https://github.com/withastro/astro/commit/560833843c6d3ce2b6c6c473ec4ae70e744bf255)]:
+  - @astrojs/markdown-remark@6.0.0-beta.1
+
+## 1.0.0-beta.0
+
+### Patch Changes
+
+- [#11825](https://github.com/withastro/astro/pull/11825) [`560ef15`](https://github.com/withastro/astro/commit/560ef15ad23bd137b56ef1048eb2df548b99fdce) Thanks [@bluwy](https://github.com/bluwy)! - Uses latest version of `@astrojs/markdown-remark` with updated Shiki APIs
+
+- Updated dependencies [[`3ab3b4e`](https://github.com/withastro/astro/commit/3ab3b4efbcdd2aabea5f949deedf51a5acefae59), [`560ef15`](https://github.com/withastro/astro/commit/560ef15ad23bd137b56ef1048eb2df548b99fdce), [`3ab3b4e`](https://github.com/withastro/astro/commit/3ab3b4efbcdd2aabea5f949deedf51a5acefae59)]:
+  - @astrojs/markdown-remark@6.0.0-alpha.1
+
+## 1.0.0-alpha.0
+
+### Patch Changes
+
+- Updated dependencies [[`b6fbdaa`](https://github.com/withastro/astro/commit/b6fbdaa94a9ecec706a99e1938fbf5cd028c72e0), [`89bab1e`](https://github.com/withastro/astro/commit/89bab1e70786123fbe933a9d7a1b80c9334dcc5f), [`d74617c`](https://github.com/withastro/astro/commit/d74617cbd3278feba05909ec83db2d73d57a153e), [`83a2a64`](https://github.com/withastro/astro/commit/83a2a648418ad30f4eb781d1c1b5f2d8a8ac846e), [`e90f559`](https://github.com/withastro/astro/commit/e90f5593d23043579611452a84b9e18ad2407ef9), [`2df49a6`](https://github.com/withastro/astro/commit/2df49a6fb4f6d92fe45f7429430abe63defeacd6), [`8a53517`](https://github.com/withastro/astro/commit/8a5351737d6a14fc55f1dafad8f3b04079e81af6)]:
+  - astro@5.0.0-alpha.0
+  - @astrojs/markdown-remark@6.0.0-alpha.0
+
 ## 0.11.5
 
 ### Patch Changes
@@ -278,7 +972,6 @@
 - [#8179](https://github.com/withastro/astro/pull/8179) [`6011d52d3`](https://github.com/withastro/astro/commit/6011d52d38e43c3e3d52bc3bc41a60e36061b7b7) Thanks [@matthewp](https://github.com/matthewp)! - Astro 3.0 Release Candidate
 
 - [#8169](https://github.com/withastro/astro/pull/8169) [`e79e3779d`](https://github.com/withastro/astro/commit/e79e3779df0ad35253abcdb931d622847d9adb12) Thanks [@bluwy](https://github.com/bluwy)! - Remove pre-shiki v0.14 theme names for compatibility. Please rename to the new theme names to migrate:
-
   - `material-darker` -> `material-theme-darker`
   - `material-default` -> `material-theme`
   - `material-lighter` -> `material-theme-lighter`
@@ -299,7 +992,6 @@
 - [#8179](https://github.com/withastro/astro/pull/8179) [`6011d52d3`](https://github.com/withastro/astro/commit/6011d52d38e43c3e3d52bc3bc41a60e36061b7b7) Thanks [@matthewp](https://github.com/matthewp)! - Astro 3.0 Release Candidate
 
 - [#8169](https://github.com/withastro/astro/pull/8169) [`e79e3779d`](https://github.com/withastro/astro/commit/e79e3779df0ad35253abcdb931d622847d9adb12) Thanks [@bluwy](https://github.com/bluwy)! - Remove pre-shiki v0.14 theme names for compatibility. Please rename to the new theme names to migrate:
-
   - `material-darker` -> `material-theme-darker`
   - `material-default` -> `material-theme`
   - `material-lighter` -> `material-theme-lighter`
@@ -478,11 +1170,7 @@
   import shiki from '@astrojs/markdoc/shiki';
 
   export default defineMarkdocConfig({
-    extends: [
-      shiki({
-        /** Shiki config options */
-      }),
-    ],
+    extends: [shiki({/** Shiki config options */})],
   });
   ```
 

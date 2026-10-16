@@ -1,45 +1,74 @@
 import type { HmrContext } from 'vite';
-import type { Logger } from '../core/logger/core.js';
+import type { AstroLogger } from '../core/logger/core.js';
+import type { CompileAstroResult } from './compile.js';
+import { parseAstroRequest } from './query.js';
 import type { CompileMetadata } from './types.js';
 import { frontmatterRE } from './utils.js';
 
-export interface HandleHotUpdateOptions {
-	logger: Logger;
+interface HandleHotUpdateOptions {
+	logger: AstroLogger;
+	compile: (
+		code: string,
+		filename: string,
+		inlineComponentAssets?: boolean,
+	) => Promise<CompileAstroResult>;
 	astroFileToCompileMetadata: Map<string, CompileMetadata>;
 }
 
 export async function handleHotUpdate(
 	ctx: HmrContext,
-	{ logger, astroFileToCompileMetadata }: HandleHotUpdateOptions,
+	{ logger, compile, astroFileToCompileMetadata }: HandleHotUpdateOptions,
 ) {
 	// HANDLING 1: Invalidate compile metadata if CSS dependency updated
 	//
 	// If any `ctx.file` is part of a CSS dependency of any Astro file, invalidate its `astroFileToCompileMetadata`
 	// so the next transform of the Astro file or Astro script/style virtual module will re-generate it
 	for (const [astroFile, compileData] of astroFileToCompileMetadata) {
+		// PostCSS plugins such as `@unocss/postcss` can list the component itself as a dependency
+		// of its own style. Edits to `ctx.file` are handled below, which needs its metadata (#18406).
+		if (astroFile === ctx.file) continue;
 		const isUpdatedFileCssDep = compileData.css.some((css) => css.dependencies?.includes(ctx.file));
 		if (isUpdatedFileCssDep) {
 			astroFileToCompileMetadata.delete(astroFile);
 		}
 	}
 
-	// HANDLING 2: Only invalidate Astro style virtual module if only style tags changed
+	// HANDLING 2: Only invalidate modules whose output includes the changed styles
 	//
 	// If only the style code has changed, e.g. editing the `color`, then we can directly invalidate
-	// the Astro CSS virtual modules only. The main Astro module's JS result will be the same and doesn't
-	// need to be invalidated.
+	// the Astro CSS virtual modules and `?container` modules. Other Astro modules don't include the CSS
+	// in their generated JavaScript and don't need to be invalidated.
 	const oldCode = astroFileToCompileMetadata.get(ctx.file)?.originalCode;
 	if (oldCode == null) return;
 	const newCode = await ctx.read();
 
 	if (isStyleOnlyChanged(oldCode, newCode)) {
 		logger.debug('watch', 'style-only change');
-		// Invalidate its `astroFileToCompileMetadata` so that the next transform of Astro style virtual module
-		// will re-generate it
-		astroFileToCompileMetadata.delete(ctx.file);
-		// Only return the Astro styles that have changed!
-		return ctx.modules.filter((mod) => mod.id?.includes('astro&type=style'));
+		// Eagerly re-compile to update the metadata with the new CSS. This ensures
+		// the compile metadata stays consistent so that subsequent SSR requests
+		// (e.g. page refresh) can load the style virtual modules without needing
+		// to re-compile from disk, avoiding potential stale state.
+		try {
+			await compile(newCode, ctx.file);
+		} catch {
+			// If re-compilation fails, fall back to deleting the metadata so the
+			// load hook will re-compile lazily on the next request.
+			astroFileToCompileMetadata.delete(ctx.file);
+		}
+		return ctx.modules.filter((mod) => {
+			if (!mod.id) {
+				return false;
+			}
+			const { query } = parseAstroRequest(mod.id);
+			// Inline style virtual modules are SSR-only, while `?container` modules embed extracted styles.
+			return query.container || (query.astro && query.type === 'style' && !query.inline);
+		});
 	}
+
+	// When non-style content changed (markup, frontmatter, scripts), Vite's default HMR
+	// invalidates the affected modules in its module graph. Clear the compile metadata so
+	// the load hook recompiles from disk on the next request instead of serving stale CSS.
+	astroFileToCompileMetadata.delete(ctx.file);
 }
 
 // Disable eslint as we're not sure how to improve this regex yet

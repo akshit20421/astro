@@ -1,16 +1,18 @@
 import type { Arguments } from 'yargs-parser';
-import type { AstroInlineConfig } from '../@types/astro.js';
-import { type LogOptions, Logger } from '../core/logger/core.js';
-import { nodeLogDestination } from '../core/logger/node.js';
+import type { AstroLogger } from '../core/logger/core.js';
+import { createNodeLoggerFromFlags } from '../core/logger/impls/node.js';
+import { createJsonLoggerFromFlags } from '../core/logger/impls/json.js';
+import type { AstroInlineConfig } from '../types/public/config.js';
 
 // Alias for now, but allows easier migration to node's `parseArgs` in the future.
 export type Flags = Arguments;
 
+/** @deprecated Use AstroConfigResolver instead */
 export function flagsToAstroInlineConfig(flags: Flags): AstroInlineConfig {
-	return {
+	const inlineConfig: AstroInlineConfig = {
 		// Inline-only configs
 		configFile: typeof flags.config === 'string' ? flags.config : undefined,
-		mode: typeof flags.mode === 'string' ? (flags.mode as AstroInlineConfig['mode']) : undefined,
+		mode: typeof flags.mode === 'string' ? flags.mode : undefined,
 		logLevel: flags.verbose ? 'debug' : flags.silent ? 'silent' : undefined,
 		force: flags.force ? true : undefined,
 
@@ -25,25 +27,39 @@ export function flagsToAstroInlineConfig(flags: Flags): AstroInlineConfig {
 				typeof flags.host === 'string' || typeof flags.host === 'boolean' ? flags.host : undefined,
 			open:
 				typeof flags.open === 'string' || typeof flags.open === 'boolean' ? flags.open : undefined,
+			allowedHosts:
+				typeof flags.allowedHosts === 'string'
+					? flags.allowedHosts.split(',')
+					: typeof flags.allowedHosts === 'boolean' && flags.allowedHosts === true
+						? flags.allowedHosts
+						: [],
 		},
 	};
+
+	if (flags.json) {
+		inlineConfig.logger = {
+			entrypoint: 'astro/logger/json',
+		};
+	}
+
+	return inlineConfig;
 }
 
 /**
  * The `logging` is usually created from an `AstroInlineConfig`, but some flows like `add`
  * doesn't read the AstroConfig directly, so we create a `logging` object from the CLI flags instead.
  */
-export function createLoggerFromFlags(flags: Flags): Logger {
-	const logging: LogOptions = {
-		dest: nodeLogDestination,
-		level: 'info',
-	};
+export function createLoggerFromFlags(flags: Flags): AstroLogger {
+	let logLevel = flags.level;
 
 	if (flags.verbose) {
-		logging.level = 'debug';
+		logLevel = 'debug';
 	} else if (flags.silent) {
-		logging.level = 'silent';
+		logLevel = 'silent';
 	}
-
-	return new Logger(logging);
+	if (flags.json) {
+		return createJsonLoggerFromFlags({ logLevel });
+	} else {
+		return createNodeLoggerFromFlags({ logLevel });
+	}
 }

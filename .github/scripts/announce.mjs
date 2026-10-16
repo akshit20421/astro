@@ -1,12 +1,11 @@
-import { globby as glob } from 'globby';
-import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { glob } from 'tinyglobby';
 import { setOutput } from './utils.mjs';
 
-const { GITHUB_REF = 'main' } = process.env;
-const baseUrl = new URL(`https://github.com/withastro/astro/blob/${GITHUB_REF}/`);
+const baseUrl = new URL(`https://github.com/withastro/astro/releases/tag/`);
 
-const emojis = ['🎉', '🥳', '🚀', '🧑‍🚀', '🎊', '🏆', '✅', '🤩', '🤖', '🙌'];
+const emojis = ['🎉', '🥳', '🚀', '🧑', '🎊', '🏆', '✅', '🤩', '🤖', '🙌'];
 const descriptors = [
 	'new releases',
 	'hot and fresh updates',
@@ -18,34 +17,34 @@ const descriptors = [
 	'updates',
 ];
 const verbs = [
-	"just went out!",
-	"just launched!",
-	"now available!",
-	"in the wild!",
-	"now live!",
-	"hit the registry!",
-	"to share!",
-	"for you!",
-	"for y’all! 🤠",
-	"comin’ your way!",
-	"comin’ atcha!",
-	"comin’ in hot!",
-	"freshly minted on the blockchain! (jk)",
-	"[is] out (now with 100% more reticulated splines!)",
-	"(as seen on TV!)",
-	"just dropped!",
-	"– artisanally hand-crafted just for you.",
-	"– oh happy day!",
-	"– enjoy!",
-	"now out. Be the first on your block to download!",
-	"made with love 💕",
-	"[is] out! Our best [version] yet!",
-	"[is] here. DOWNLOAD! DOWNLOAD! DOWNLOAD!",
-	"... HUZZAH!",
-	"[has] landed!",
-	"landed! The internet just got a little more fun.",
-	"– from our family to yours.",
-	"– go forth and build!"
+	'just went out!',
+	'just launched!',
+	'now available!',
+	'in the wild!',
+	'now live!',
+	'hit the registry!',
+	'to share!',
+	'for you!',
+	'for y’all! 🤠',
+	'comin’ your way!',
+	'comin’ atcha!',
+	'comin’ in hot!',
+	'freshly minted on the blockchain! (jk)',
+	'[is] out (now with 100% more reticulated splines!)',
+	'(as seen on TV!)',
+	'just dropped!',
+	'– artisanally hand-crafted just for you.',
+	'– oh happy day!',
+	'– enjoy!',
+	'now out. Be the first on your block to download!',
+	'made with love 💕',
+	'[is] out! Our best [version] yet!',
+	'[is] here. DOWNLOAD! DOWNLOAD! DOWNLOAD!',
+	'... HUZZAH!',
+	'[has] landed!',
+	'landed! The internet just got a little more fun.',
+	'– from our family to yours.',
+	'– go forth and build!',
 ];
 const extraVerbs = [
 	'new',
@@ -72,7 +71,7 @@ const plurals = new Map([
 
 function pluralize(text) {
 	return text.replace(/(\[([^\]]+)\])/gm, (_, _full, match) =>
-		plurals.has(match) ? plurals.get(match) : `${match}s`
+		plurals.has(match) ? plurals.get(match) : `${match}s`,
 	);
 }
 
@@ -85,13 +84,15 @@ async function generatePackageMap() {
 	const packageRoot = new URL('../../packages/', import.meta.url);
 	const packages = await glob(['*/package.json', '*/*/package.json'], {
 		cwd: fileURLToPath(packageRoot),
+		expandDirectories: false,
+		ignore: ['**/node_modules/**'],
 	});
 	await Promise.all(
 		packages.map(async (pkg) => {
 			const pkgFile = fileURLToPath(new URL(pkg, packageRoot));
 			const content = await readFile(pkgFile).then((res) => JSON.parse(res.toString()));
 			packageMap.set(content.name, `./packages/${pkg.replace('/package.json', '')}`);
-		})
+		}),
 	);
 }
 
@@ -108,9 +109,9 @@ async function generateMessage() {
 			return {
 				name,
 				version,
-				url: new URL(`${p}/CHANGELOG.md#${version.replace(/\./g, '')}`, baseUrl).toString(),
+				url: new URL(encodeURIComponent(`${name}@${version}`), baseUrl).toString(),
 			};
-		})
+		}),
 	);
 
 	const emoji = item(emojis);
@@ -122,7 +123,7 @@ async function generateMessage() {
 	if (packages.length === 1) {
 		const { name, version, url } = packages[0];
 		message += `${emoji} \`${name}@${version}\` ${singularlize(
-			verb
+			verb,
 		)}\nRead the [release notes →](<${url}>)\n`;
 	} else {
 		message += `${emoji} Some ${descriptor} ${pluralize(verb)}\n\n`;
@@ -141,7 +142,7 @@ async function generateMessage() {
 		message += `\nAlso ${item(extraVerbs)}:`;
 
 		const remainingPackages = packages.filter((p) => p.name !== name);
-		for (const { name, version, url } of remainingPackages) {
+		for (const { name, version, _url } of remainingPackages) {
 			message += `\n• \`${name}@${version}\``;
 		}
 
@@ -159,7 +160,7 @@ async function generateMessage() {
 
 async function run() {
 	const content = await generateMessage();
-	console.log(content);
+	console.info(content);
 	setOutput('DISCORD_MESSAGE', content);
 }
 

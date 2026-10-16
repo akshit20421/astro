@@ -1,33 +1,17 @@
 // @ts-expect-error
 import { imageConfig } from 'astro:assets';
 import { isRemotePath } from '@astrojs/internal-helpers/path';
+import { isRemoteAllowed } from '@astrojs/internal-helpers/remote';
 import * as mime from 'mrmime';
-import type { APIRoute } from '../../@types/astro.js';
+import type { APIRoute } from '../../types/public/common.js';
 import { getConfiguredImageService } from '../internal.js';
 import { etag } from '../utils/etag.js';
-import { isRemoteAllowed } from '../utils/remotePattern.js';
-
-async function loadRemoteImage(src: URL, headers: Headers) {
-	try {
-		const res = await fetch(src, {
-			// Forward all headers from the original request
-			headers,
-		});
-
-		if (!res.ok) {
-			return undefined;
-		}
-
-		return await res.arrayBuffer();
-	} catch {
-		return undefined;
-	}
-}
+import { loadImage } from './loadImage.js';
 
 /**
  * Endpoint used in dev and SSR to serve optimized images by the base image services
  */
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async ({ request, logger }) => {
 	try {
 		const imageService = await getConfiguredImageService();
 
@@ -36,7 +20,7 @@ export const GET: APIRoute = async ({ request }) => {
 		}
 
 		const url = new URL(request.url);
-		const transform = await imageService.parseURL(url, imageConfig);
+		const transform = await imageService.parseURL(url, imageConfig, logger);
 
 		if (!transform?.src) {
 			throw new Error('Incorrect transform returned by `parseURL`');
@@ -45,13 +29,24 @@ export const GET: APIRoute = async ({ request }) => {
 		let inputBuffer: ArrayBuffer | undefined = undefined;
 
 		const isRemoteImage = isRemotePath(transform.src);
-		const sourceUrl = isRemoteImage ? new URL(transform.src) : new URL(transform.src, url.origin);
 
 		if (isRemoteImage && isRemoteAllowed(transform.src, imageConfig) === false) {
 			return new Response('Forbidden', { status: 403 });
 		}
 
-		inputBuffer = await loadRemoteImage(sourceUrl, isRemoteImage ? new Headers() : request.headers);
+		const sourceUrl = new URL(transform.src, url.origin);
+
+		// Have we been tricked into thinking this is local?
+		if (!isRemoteImage && sourceUrl.origin !== url.origin) {
+			return new Response('Forbidden', { status: 403 });
+		}
+
+		inputBuffer = await loadImage(
+			sourceUrl,
+			isRemoteImage ? new Headers() : request.headers,
+			imageConfig,
+			isRemoteImage,
+		);
 
 		if (!inputBuffer) {
 			return new Response('Not Found', { status: 404 });
@@ -61,9 +56,10 @@ export const GET: APIRoute = async ({ request }) => {
 			new Uint8Array(inputBuffer),
 			transform,
 			imageConfig,
+			logger,
 		);
 
-		return new Response(data, {
+		return new Response(data as Uint8Array<ArrayBuffer>, {
 			status: 200,
 			headers: {
 				'Content-Type': mime.lookup(format) ?? `image/${format}`,
@@ -73,7 +69,7 @@ export const GET: APIRoute = async ({ request }) => {
 			},
 		});
 	} catch (err: unknown) {
-		console.error('Could not process image request:', err);
-		return new Response(`Server Error: ${err}`, { status: 500 });
+		logger.error(`Could not process image request: ${err}`);
+		return new Response('Internal Server Error', { status: 500 });
 	}
 };

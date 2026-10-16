@@ -1,18 +1,17 @@
-import type { Context } from './context.js';
-
 import path from 'node:path';
 import { color, generateProjectName } from '@astrojs/cli-kit';
 import { info, log, title } from '../messages.js';
+import type { Context } from './context.js';
 
 import { isEmpty, toValidName } from './shared.js';
 
 export async function projectName(
-	ctx: Pick<Context, 'cwd' | 'yes' | 'dryRun' | 'prompt' | 'projectName' | 'exit'>,
+	ctx: Pick<Context, 'yes' | 'dryRun' | 'prompt' | 'projectName' | 'exit'> & { cwd?: string },
 ) {
 	await checkCwd(ctx.cwd);
 
 	if (!ctx.cwd || !isEmpty(ctx.cwd)) {
-		if (!isEmpty(ctx.cwd)) {
+		if (ctx.cwd && !isEmpty(ctx.cwd)) {
 			await info('Hmm...', `${color.reset(`"${ctx.cwd}"`)}${color.dim(` is not empty!`)}`);
 		}
 

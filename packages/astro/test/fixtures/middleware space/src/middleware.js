@@ -1,6 +1,16 @@
 import { defineMiddleware, sequence } from 'astro:middleware';
 
 const first = defineMiddleware(async (context, next) => {
+	// Auth check: protect /admin route
+	if (context.url.pathname === '/admin') {
+		const authToken = context.request.headers.get('Authorization');
+		if (!authToken) {
+			return context.redirect('/');
+		}
+		// Auth token present, allow access
+		return await next();
+	}
+
 	if (context.request.url.includes('/lorem')) {
 		context.locals.name = 'ipsum';
 	} else if (context.request.url.includes('/rewrite')) {
@@ -47,9 +57,9 @@ const first = defineMiddleware(async (context, next) => {
 			context.cookies.set('foo', 'bar');
 		}
 
-		context.locals = {
+		Object.assign(context.locals, {
 			name: 'bar',
-		};
+		});
 	}
 	return await next();
 });
@@ -65,13 +75,22 @@ const second = defineMiddleware(async (context, next) => {
 
 const third = defineMiddleware(async (context, next) => {
 	if (context.request.url.includes('/broken-locals')) {
-		context.locals = {
+		Object.assign(context.locals, {
 			fn() {},
-		};
+		});
 	} else if (context.request.url.includes('/does-nothing')) {
 		return undefined;
 	}
 	return next();
 });
 
-export const onRequest = sequence(first, second, third);
+const fourth = defineMiddleware((context, next) => {
+	if (context.request.url.includes('/no-route-but-200')) {
+		return new Response("It's OK!", {
+			status: 200
+		});
+	}
+	return next()
+})
+
+export const onRequest = sequence(first, second, third, fourth);

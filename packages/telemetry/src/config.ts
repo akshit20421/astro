@@ -2,10 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import dget from 'dlv';
 import { dset } from 'dset';
 
-export interface ConfigOptions {
+interface ConfigOptions {
 	name: string;
 }
 
@@ -21,6 +20,7 @@ function getConfigDir(name: string) {
 		const { XDG_CONFIG_HOME = path.join(homedir, '.config') } = process.env;
 		return path.join(XDG_CONFIG_HOME, name);
 	};
+	// eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
 	switch (process.platform) {
 		case 'darwin':
 			return macos();
@@ -32,10 +32,12 @@ function getConfigDir(name: string) {
 }
 
 export class GlobalConfig {
+	private project: ConfigOptions;
 	private dir: string;
 	private file: string;
 
-	constructor(private project: ConfigOptions) {
+	constructor(project: ConfigOptions) {
+		this.project = project;
 		this.dir = getConfigDir(this.project.name);
 		this.file = path.join(this.dir, 'config.json');
 	}
@@ -75,7 +77,7 @@ export class GlobalConfig {
 		return true;
 	}
 	get(key: string): any {
-		return dget(this.store, key);
+		return key.split('.').reduce((obj, k) => obj?.[k], this.store);
 	}
 	has(key: string): boolean {
 		return typeof this.get(key) !== 'undefined';

@@ -1,8 +1,51 @@
-import { escape } from 'html-escaper';
 import { streamAsyncIterator } from './util.js';
 
-// Leverage the battle-tested `html-escaper` npm package.
-export const escapeHTML = escape;
+const ESCAPABLE = /[&<>'"]/g;
+
+function entityFor(code: number): string {
+	switch (code) {
+		case 38:
+			return '&amp;';
+		case 60:
+			return '&lt;';
+		case 62:
+			return '&gt;';
+		case 39:
+			return '&#39;';
+		default:
+			return '&quot;';
+	}
+}
+
+export function escapeHTML(value: string): string {
+	ESCAPABLE.lastIndex = 0;
+	if (!ESCAPABLE.test(value)) return value;
+	let output = '';
+	let last = 0;
+	do {
+		const index = ESCAPABLE.lastIndex - 1;
+		if (last !== index) output += value.slice(last, index);
+		output += entityFor(value.charCodeAt(index));
+		last = index + 1;
+	} while (ESCAPABLE.test(value));
+	return last === value.length ? output : output + value.slice(last);
+}
+
+/**
+ * Serializes a value to a JSON string that is safe to embed inside a `<script>` tag.
+ * All `<` characters are escaped to `\u003c` so the browser's HTML parser cannot be
+ * tricked into closing the script block early via `</script>` variants (case-insensitive,
+ * whitespace, or self-closing forms) or `<!--` comment injection.
+ * @see https://mathiasbynens.be/notes/etago
+ */
+export function stringifyForScript(value: any): string {
+	return JSON.stringify(value)?.replace(/</g, '\\u003c');
+}
+
+/** Escapes CSS text so it can be embedded inside a `<style>` tag. */
+export function escapeStyleText(value: string): string {
+	return value.replaceAll('<', '\\3C ');
+}
 
 export class HTMLBytes extends Uint8Array {}
 
@@ -14,15 +57,15 @@ Object.defineProperty(HTMLBytes.prototype, Symbol.toStringTag, {
 	},
 });
 
+const htmlStringSymbol = Symbol.for('astro:html-string');
+
 /**
  * A "blessed" extension of String that tells Astro that the string
  * has already been escaped. This helps prevent double-escaping of HTML.
  */
-export class HTMLString extends String {
-	get [Symbol.toStringTag]() {
-		return 'HTMLString';
-	}
-}
+export class HTMLString extends String {}
+
+Object.defineProperty(HTMLString.prototype, htmlStringSymbol, { value: true });
 
 type BlessedType = string | HTMLBytes;
 
@@ -33,7 +76,7 @@ type BlessedType = string | HTMLBytes;
  */
 export const markHTMLString = (value: any) => {
 	// If value is already marked as an HTML string, there is nothing to do.
-	if (value instanceof HTMLString) {
+	if (isHTMLString(value)) {
 		return value;
 	}
 	// Cast to `HTMLString` to mark the string as valid HTML. Any HTML escaping
@@ -48,7 +91,7 @@ export const markHTMLString = (value: any) => {
 };
 
 export function isHTMLString(value: any): value is HTMLString {
-	return Object.prototype.toString.call(value) === '[object HTMLString]';
+	return typeof value === 'object' && value !== null && value[htmlStringSymbol] === true;
 }
 
 function markHTMLBytes(bytes: Uint8Array) {

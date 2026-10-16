@@ -1,22 +1,150 @@
 import fs from 'node:fs';
-import type { TransformOptions } from '@astrojs/compiler';
-import { type ResolvedConfig, normalizePath, preprocessCSS } from 'vite';
+import { createRequire } from 'node:module';
+import { preprocessCSS, type ResolvedConfig } from 'vite';
+import type { AstroConfig } from '../../types/public/config.js';
 import { AstroErrorData, CSSError, positionAt } from '../errors/index.js';
+import { normalizePath } from '../viteUtils.js';
 import type { CompileCssResult } from './types.js';
 
 export type PartialCompileCssResult = Pick<CompileCssResult, 'isGlobal' | 'dependencies'>;
 
+interface PreprocessorResult {
+	code: string;
+	map?: string;
+}
+
+interface PreprocessorError {
+	error: string;
+}
+
+export type PreprocessStyleFn = (
+	content: string,
+	attrs: Record<string, string>,
+) => Promise<PreprocessorResult | PreprocessorError>;
+
+/**
+ * Rewrites absolute URLs in CSS to include the base path.
+ *
+ * Vite's `preprocessCSS` function explicitly does NOT resolve URLs in `url()` or `image-set()`
+ * (https://vite.dev/guide/api-javascript.html#preprocesscss). During build, Vite's CSS plugin handles URL rewriting through its
+ * full transform pipeline, but during dev, Astro calls `preprocessCSS` directly through the
+ * compiler, bypassing that pipeline.
+ *
+ * Only absolute URLs starting with `/` (e.g., `/fonts/font.woff`, `/images/bg.png`) are rewritten
+ *
+ * Uses Vite's cssUrlRE regex pattern for reliable URL matching.
+ * See: https://github.com/vitejs/vite/blob/main/packages/vite/src/node/plugins/css.ts
+ *
+ * @param css - The CSS string to process
+ * @param base - The base path to prepend (e.g., `/my-base`)
+ * @returns The CSS with rewritten URLs
+ */
+function rewriteCssUrls(css: string, base: string): string {
+	// Only rewrite if base is not the default '/'
+	if (!base || base === '/') {
+		return css;
+	}
+
+	// Normalize base path (remove trailing slash for consistent joining)
+	const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
+
+	// Safety check: base should start with '/' (already normalized by Astro config)
+	if (!normalizedBase.startsWith('/')) {
+		return css;
+	}
+
+	// Vite's production-tested regex for matching url() in CSS
+	// Matches url(...) while handling quotes, unquoted URLs, and edge cases
+	// Excludes @import statements via negative lookbehind
+	// Matches Vite's cssUrlRE pattern exactly - capturing groups preserved for compatibility
+	const cssUrlRE =
+		// eslint-disable-next-line regexp/no-unused-capturing-group
+		/(?<!@import\s+)(?<=^|[^\w\-\u0080-\uffff])url\((\s*('[^']+'|"[^"]+")\s*|(?:\\.|[^'")\\])+)\)/g;
+
+	return css.replace(cssUrlRE, (match, rawUrl: string) => {
+		// Extract URL value, removing quotes if present
+		let url = rawUrl.trim();
+		let quote = '';
+
+		// Check if URL is quoted (single or double)
+		if ((url.startsWith("'") && url.endsWith("'")) || (url.startsWith('"') && url.endsWith('"'))) {
+			quote = url[0];
+			url = url.slice(1, -1);
+		}
+
+		url = url.trim();
+
+		// Only rewrite root-relative URLs (start with / but not //)
+		const isRootRelative = url.startsWith('/') && !url.startsWith('//');
+
+		// Skip external URLs and data URIs
+		const isExternal =
+			url.startsWith('data:') || url.startsWith('http:') || url.startsWith('https:');
+
+		// Skip if already has base path (makes function idempotent)
+		const alreadyHasBase = url.startsWith(normalizedBase + '/');
+
+		if (isRootRelative && !isExternal && !alreadyHasBase) {
+			return `url(${quote}${normalizedBase}${url}${quote})`;
+		}
+
+		return match;
+	});
+}
+
+/**
+ * Workaround for https://github.com/withastro/astro/issues/16524.
+ *
+ * When `vite.css.transformer === 'lightningcss'`, lightningcss flattens nested
+ * selectors (e.g. `.parent { :where(& > :not(:last-child)) { ... } }`) BEFORE
+ * `@astrojs/compiler` injects scope attributes. The injector then sees a
+ * top-level rule whose leading compound is `:where(...)` rather than
+ * `.parent`, and falls back to prepending `[data-astro-cid-X]` as a new
+ * leading compound, which constrains the wrong element.
+ *
+ * To preserve the structural shape the scope injector expects, we ask
+ * lightningcss to skip its `Nesting` lowering pass for the per-component
+ * preprocess call. Vite's downstream pipeline still lowers nesting for the
+ * final bundle, so the produced CSS remains compatible with the user's
+ * targets.
+ *
+ * Returns a NEW config object (no mutation of the shared `viteConfig`) so
+ * that parallel `.astro` compilations don't race on a shared mutable
+ * property. Returns `undefined` if `lightningcss` cannot be resolved from
+ * the user's project, in which case the caller falls back to the original
+ * config (and Vite's preprocessCSS will surface the misconfiguration).
+ */
+function withNestingExcluded(viteConfig: ResolvedConfig): ResolvedConfig | undefined {
+	let Features: { Nesting: number };
+	try {
+		// `lightningcss` is loaded by Vite as an optional peer dep, so we
+		// resolve it from the user's project root (where Vite resolves it).
+		const requireFromRoot = createRequire(viteConfig.root + '/');
+		Features = (requireFromRoot('lightningcss') as { Features: { Nesting: number } }).Features;
+	} catch {
+		return undefined;
+	}
+	const lcss = (viteConfig.css?.lightningcss ?? {}) as { exclude?: number };
+	const prevExclude = lcss.exclude ?? 0;
+	return {
+		...viteConfig,
+		css: { ...viteConfig.css, lightningcss: { ...lcss, exclude: prevExclude | Features.Nesting } },
+	} as ResolvedConfig;
+}
+
 export function createStylePreprocessor({
 	filename,
 	viteConfig,
+	astroConfig,
 	cssPartialCompileResults,
 	cssTransformErrors,
 }: {
 	filename: string;
 	viteConfig: ResolvedConfig;
+	astroConfig: AstroConfig;
 	cssPartialCompileResults: Partial<CompileCssResult>[];
 	cssTransformErrors: Error[];
-}): TransformOptions['preprocessStyle'] {
+}): PreprocessStyleFn {
 	let processedStylesCount = 0;
 
 	return async (content, attrs) => {
@@ -24,10 +152,25 @@ export function createStylePreprocessor({
 		const lang = `.${attrs?.lang || 'css'}`.toLowerCase();
 		const id = `${filename}?astro&type=style&index=${index}&lang${lang}`;
 		try {
-			const result = await preprocessCSS(content, id, viteConfig);
+			// Workaround for #16524: when lightningcss is the Vite CSS transformer,
+			// exclude its Nesting lowering pass so the Astro compiler's scope
+			// injector still sees `.parent` (and not `:where(.parent ...)`) as the
+			// leading compound. Vite's downstream pipeline still lowers nesting
+			// for the final bundle.
+			const effectiveViteConfig =
+				viteConfig.css?.transformer === 'lightningcss'
+					? (withNestingExcluded(viteConfig) ?? viteConfig)
+					: viteConfig;
+			const result = await preprocessCSS(content, id, effectiveViteConfig);
+
+			// Rewrite CSS URLs to include the base path
+			// This is necessary because preprocessCSS doesn't handle URL rewriting
+			const rewrittenCode = rewriteCssUrls(result.code, astroConfig.base);
 
 			cssPartialCompileResults[index] = {
-				isGlobal: !!attrs['is:global'],
+				// Use `in` operator to handle both Go compiler (boolean `true`) and
+				// Rust compiler (empty string `""`) representations of boolean attributes.
+				isGlobal: 'is:global' in attrs,
 				dependencies: result.deps ? [...result.deps].map((dep) => normalizePath(dep)) : [],
 			};
 
@@ -40,7 +183,7 @@ export function createStylePreprocessor({
 				}
 			}
 
-			return { code: result.code, map };
+			return { code: rewrittenCode, map };
 		} catch (err: any) {
 			try {
 				err = enhanceCSSError(err, filename, content);

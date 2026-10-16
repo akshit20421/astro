@@ -2,7 +2,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { prependForwardSlash, slash } from '../core/path.js';
 import type { ModuleLoader } from './module-loader/index.js';
-import { VALID_ID_PREFIX, resolveJsToTs, unwrapId, viteID } from './util.js';
+import { unwrapId, VALID_ID_PREFIX, viteID } from './util.js';
+
+export { resolvePath } from '@astrojs/internal-helpers/mdx';
 
 const isWindows = typeof process !== 'undefined' && process.platform === 'win32';
 
@@ -11,18 +13,6 @@ const isWindows = typeof process !== 'undefined' && process.platform === 'win32'
  */
 export function normalizePath(id: string) {
 	return path.posix.normalize(isWindows ? slash(id) : id);
-}
-
-/**
- * Resolve the hydration paths so that it can be imported in the client
- */
-export function resolvePath(specifier: string, importer: string) {
-	if (specifier.startsWith('.')) {
-		const absoluteSpecifier = path.resolve(path.dirname(importer), specifier);
-		return resolveJsToTs(normalizePath(absoluteSpecifier));
-	} else {
-		return specifier;
-	}
 }
 
 export function rootRelativePath(
@@ -68,3 +58,7 @@ export async function resolveIdToUrl(loader: ModuleLoader, id: string, root?: UR
 	}
 	return VALID_ID_PREFIX + resultId;
 }
+
+// https://github.com/vitejs/vite/blob/2f9428d1ffd988e30cb253d5bb84844fb1654e86/packages/vite/src/node/constants.ts#L108
+// Used by isCSSRequest() under the hood
+export const CSS_LANGS_RE = /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/;

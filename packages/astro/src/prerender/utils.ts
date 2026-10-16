@@ -1,6 +1,6 @@
-import type { AstroConfig } from '../@types/astro.js';
 import { getOutDirWithinCwd } from '../core/build/common.js';
-import { isServerLikeOutput } from '../core/util.js';
+import type { AstroSettings } from '../types/astro.js';
+import type { AstroConfig } from '../types/public/config.js';
 
 export function getPrerenderDefault(config: AstroConfig) {
 	return config.output !== 'server';
@@ -9,11 +9,30 @@ export function getPrerenderDefault(config: AstroConfig) {
 /**
  * Returns the correct output directory of the SSR build based on the configuration
  */
-export function getOutputDirectory(config: AstroConfig): URL {
-	const ssr = isServerLikeOutput(config);
-	if (ssr) {
-		return config.build.server;
-	} else {
-		return getOutDirWithinCwd(config.outDir);
+export function getServerOutputDirectory(settings: AstroSettings): URL {
+	const preserveStructure = settings.adapter?.adapterFeatures?.preserveBuildServerDir;
+
+	if (settings.buildOutput === 'server' || preserveStructure) {
+		return settings.config.build.server;
 	}
+	return getOutDirWithinCwd(settings.config.outDir);
+}
+
+/**
+ * Returns the output directory used by the prerender environment.
+ */
+export function getPrerenderOutputDirectory(settings: AstroSettings): URL {
+	return new URL('./.prerender/', getServerOutputDirectory(settings));
+}
+
+/**
+ * Returns the correct output directory of the client build based on the configuration
+ */
+export function getClientOutputDirectory(settings: AstroSettings): URL {
+	const preserveStructure = settings.adapter?.adapterFeatures?.preserveBuildClientDir;
+
+	if (settings.buildOutput === 'server' || preserveStructure) {
+		return settings.config.build.client;
+	}
+	return settings.config.outDir;
 }

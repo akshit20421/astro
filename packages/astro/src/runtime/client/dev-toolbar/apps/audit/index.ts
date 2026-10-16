@@ -1,15 +1,16 @@
-import type { DevToolbarApp } from '../../../../../@types/astro.js';
+import type { ResolvedDevToolbarApp } from '../../../../../types/public/toolbar.js';
 import { settings } from '../../settings.js';
 import type { DevToolbarHighlight } from '../../ui-library/highlight.js';
 import { positionHighlight } from '../utils/highlight.js';
 import { closeOnOutsideClick } from '../utils/window.js';
+import { processAnnotations } from './annotations.js';
 import { type AuditRule, rulesCategories } from './rules/index.js';
 import { DevToolbarAuditListItem } from './ui/audit-list-item.js';
 import { DevToolbarAuditListWindow } from './ui/audit-list-window.js';
 import { createAuditUI } from './ui/audit-ui.js';
 
 const icon =
-	'<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 1 20 16"><path fill="#fff" d="M.6 2A1.1 1.1 0 0 1 1.7.9h16.6a1.1 1.1 0 1 1 0 2.2H1.6A1.1 1.1 0 0 1 .8 2Zm1.1 7.1h6a1.1 1.1 0 0 0 0-2.2h-6a1.1 1.1 0 0 0 0 2.2ZM9.3 13H1.8a1.1 1.1 0 1 0 0 2.2h7.5a1.1 1.1 0 1 0 0-2.2Zm11.3 1.9a1.1 1.1 0 0 1-1.5 0l-1.7-1.7a4.1 4.1 0 1 1 1.6-1.6l1.6 1.7a1.1 1.1 0 0 1 0 1.6Zm-5.3-3.4a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/></svg>';
+	'<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 1 20 16" aria-hidden="true"><path fill="#fff" d="M.6 2A1.1 1.1 0 0 1 1.7.9h16.6a1.1 1.1 0 1 1 0 2.2H1.6A1.1 1.1 0 0 1 .8 2Zm1.1 7.1h6a1.1 1.1 0 0 0 0-2.2h-6a1.1 1.1 0 0 0 0 2.2ZM9.3 13H1.8a1.1 1.1 0 1 0 0 2.2h7.5a1.1 1.1 0 1 0 0-2.2Zm11.3 1.9a1.1 1.1 0 0 1-1.5 0l-1.7-1.7a4.1 4.1 0 1 1 1.6-1.6l1.6 1.7a1.1 1.1 0 0 1 0 1.6Zm-5.3-3.4a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8Z"/></svg>';
 
 export type Audit = {
 	auditedElement: HTMLElement;
@@ -35,10 +36,11 @@ export default {
 			'astro-dev-toolbar-audit-window',
 		) as DevToolbarAuditListWindow;
 		let hasCreatedUI = false;
+		auditWindow.popover = '';
 
 		canvas.appendChild(auditWindow);
 
-		await lint();
+		await run();
 
 		let mutationDebounce: ReturnType<typeof setTimeout>;
 		const observer = new MutationObserver(() => {
@@ -56,7 +58,7 @@ export default {
 				if ('requestIdleCallback' in window) {
 					window.requestIdleCallback(
 						async () => {
-							lint().then(() => {
+							run().then(() => {
 								if (showState) createAuditsUI();
 							});
 						},
@@ -65,7 +67,7 @@ export default {
 				} else {
 					// Fallback for old versions of Safari, we'll assume that things are less likely to be busy after 150ms.
 					setTimeout(async () => {
-						lint().then(() => {
+						run().then(() => {
 							if (showState) createAuditsUI();
 						});
 					}, 150);
@@ -79,7 +81,7 @@ export default {
 			observer.disconnect();
 		});
 		document.addEventListener('astro:after-swap', async () => {
-			lint();
+			run();
 		});
 		document.addEventListener('astro:page-load', async () => {
 			refreshLintPositions();
@@ -127,6 +129,11 @@ export default {
 			canvas.appendChild(fragment);
 
 			hasCreatedUI = true;
+		}
+
+		async function run() {
+			processAnnotations();
+			await lint();
 		}
 
 		async function lint() {
@@ -187,10 +194,13 @@ export default {
 				return;
 			}
 
-			// If the element is an image but not yet loaded, ignore it
-			// TODO: We shouldn't ignore this, because it is valid for an image to not be loaded at start (e.g. lazy loading)
+			// If the element is an image that hasn't loaded yet, wait for it so that
+			// position-based checks (e.g. above/below the fold) have accurate layout data.
 			if (originalElement.nodeName === 'IMG' && !(originalElement as HTMLImageElement).complete) {
-				return;
+				await new Promise<void>((resolve) => {
+					originalElement.addEventListener('load', () => resolve(), { once: true });
+					originalElement.addEventListener('error', () => resolve(), { once: true });
+				});
 			}
 
 			audits.push({
@@ -219,4 +229,4 @@ export default {
 			});
 		}
 	},
-} satisfies DevToolbarApp;
+} satisfies ResolvedDevToolbarApp;

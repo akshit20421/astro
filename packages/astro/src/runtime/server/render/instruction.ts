@@ -25,28 +25,46 @@ export type MaybeRenderHeadInstruction = {
 	type: 'maybe-head';
 };
 
-export type RenderInstruction =
+export type ServerIslandRuntimeInstruction = {
+	type: 'server-island-runtime';
+};
+
+export type RenderScriptInstruction = {
+	type: 'script';
+	id: string;
+	content: string;
+};
+
+export type TemplateEnterInstruction = {
+	type: 'template-enter';
+};
+
+export type TemplateExitInstruction = {
+	type: 'template-exit';
+};
+
+export type RenderInstruction = {
+	[RenderInstructionSymbol]?: true;
+} & (
 	| RenderDirectiveInstruction
 	| RenderHeadInstruction
 	| MaybeRenderHeadInstruction
-	| RendererHydrationScriptInstruction;
+	| RendererHydrationScriptInstruction
+	| ServerIslandRuntimeInstruction
+	| RenderScriptInstruction
+	| TemplateEnterInstruction
+	| TemplateExitInstruction
+);
 
-export function createRenderInstruction(
-	instruction: RenderDirectiveInstruction,
-): RenderDirectiveInstruction;
-export function createRenderInstruction(
-	instruction: RendererHydrationScriptInstruction,
-): RendererHydrationScriptInstruction;
-export function createRenderInstruction(instruction: RenderHeadInstruction): RenderHeadInstruction;
-export function createRenderInstruction(
-	instruction: MaybeRenderHeadInstruction,
-): MaybeRenderHeadInstruction;
-export function createRenderInstruction(instruction: { type: string }): RenderInstruction {
-	return Object.defineProperty(instruction as RenderInstruction, RenderInstructionSymbol, {
-		value: true,
-	});
+export function createRenderInstruction<T extends RenderInstruction>(instruction: T): T {
+	instruction[RenderInstructionSymbol] = true;
+	return instruction;
 }
 
 export function isRenderInstruction(chunk: any): chunk is RenderInstruction {
 	return chunk && typeof chunk === 'object' && chunk[RenderInstructionSymbol];
+}
+
+export function isScriptInstruction(chunk: any): chunk is RenderScriptInstruction {
+	return chunk && typeof chunk === 'object' && 'type' in chunk && chunk.type === 'script';
 }

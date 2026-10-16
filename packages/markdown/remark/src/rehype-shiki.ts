@@ -1,16 +1,32 @@
 import type { Root } from 'hast';
 import type { Plugin } from 'unified';
 import { highlightCodeBlocks } from './highlight.js';
-import { type ShikiHighlighter, createShikiHighlighter } from './shiki.js';
-import type { ShikiConfig } from './types.js';
+import { createShikiHighlighter, type ShikiHighlighter } from '@astrojs/internal-helpers/shiki';
+import type { ShikiConfig } from '@astrojs/internal-helpers/markdown';
 
-export const rehypeShiki: Plugin<[ShikiConfig?], Root> = (config) => {
+export const rehypeShiki: Plugin<[ShikiConfig, string[]?], Root> = (config, excludeLangs) => {
 	let highlighterAsync: Promise<ShikiHighlighter> | undefined;
 
 	return async (tree) => {
-		highlighterAsync ??= createShikiHighlighter(config);
+		highlighterAsync ??= createShikiHighlighter({
+			langs: config?.langs,
+			theme: config?.theme,
+			themes: config?.themes,
+			langAlias: config?.langAlias,
+		});
 		const highlighter = await highlighterAsync;
 
-		await highlightCodeBlocks(tree, highlighter.highlight);
+		await highlightCodeBlocks(
+			tree,
+			(code, language, options) => {
+				return highlighter.codeToHast(code, language, {
+					meta: options?.meta,
+					wrap: config?.wrap,
+					defaultColor: config?.defaultColor,
+					transformers: config?.transformers,
+				});
+			},
+			excludeLangs,
+		);
 	};
 };

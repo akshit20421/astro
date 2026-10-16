@@ -1,14 +1,12 @@
+import { clsx } from 'clsx';
+import { AstroError, AstroErrorData } from '../../../core/errors/index.js';
 import type {
 	AstroComponentMetadata,
 	RouteData,
 	SSRLoadedRenderer,
 	SSRResult,
-} from '../../../@types/astro.js';
-import { createRenderInstruction } from './instruction.js';
-
-import { clsx } from 'clsx';
-import { AstroError, AstroErrorData } from '../../../core/errors/index.js';
-import { markHTMLString } from '../escape.js';
+} from '../../../types/public/internal.js';
+import { escapeHTML, markHTMLString } from '../escape.js';
 import { extractDirectives, generateHydrateScript } from '../hydration.js';
 import { serializeProps } from '../serialize.js';
 import { shorthash } from '../shorthash.js';
@@ -16,23 +14,25 @@ import { isPromise } from '../util.js';
 import { type AstroComponentFactory, isAstroComponentFactory } from './astro/factory.js';
 import { renderTemplate } from './astro/index.js';
 import { createAstroComponentInstance } from './astro/instance.js';
-
 import {
+	chunkToString,
 	Fragment,
 	type RenderDestination,
-	type RenderInstance,
 	Renderer,
-	chunkToString,
+	type RenderInstance,
 } from './common.js';
 import { componentIsHTMLElement, renderHTMLElement } from './dom.js';
 import { maybeRenderHead } from './head.js';
-import { containsServerDirective, renderServerIsland } from './server-islands.js';
-import { type ComponentSlots, renderSlotToString, renderSlots } from './slot.js';
+import { createRenderInstruction } from './instruction.js';
+import { bufferPropagatedHead } from './head-propagation/runtime.js';
+import { containsServerDirective, ServerIslandComponent } from './server-islands.js';
+import { renderChild } from './any.js';
+import { type ComponentSlots, renderSlots, renderSlotToString } from './slot.js';
 import { formatList, internalSpreadAttributes, renderElement, voidElementNames } from './util.js';
 
 const needsHeadRenderingSymbol = Symbol.for('astro.needsHeadRendering');
 const rendererAliases = new Map([['solid', 'solid-js']]);
-const clientOnlyValues = new Set(['solid-js', 'react', 'preact', 'vue', 'svelte', 'lit']);
+const clientOnlyValues = new Set(['solid-js', 'react', 'preact', 'vue', 'svelte']);
 
 function guessRenderers(componentUrl?: string): string[] {
 	const extname = componentUrl?.split('.').pop();
@@ -44,6 +44,7 @@ function guessRenderers(componentUrl?: string): string[] {
 		case 'jsx':
 		case 'tsx':
 			return ['@astrojs/react', '@astrojs/preact', '@astrojs/solid-js', '@astrojs/vue (jsx)'];
+		case undefined:
 		default:
 			return [
 				'@astrojs/react',
@@ -51,7 +52,6 @@ function guessRenderers(componentUrl?: string): string[] {
 				'@astrojs/solid-js',
 				'@astrojs/vue',
 				'@astrojs/svelte',
-				'@astrojs/lit',
 			];
 	}
 }
@@ -131,7 +131,7 @@ async function renderFrameworkComponent(
 			let error;
 			for (const r of renderers) {
 				try {
-					if (await r.ssr.check.call({ result }, Component, props, children)) {
+					if (await r.ssr.check.call({ result }, Component, props, children, metadata)) {
 						renderer = r;
 						break;
 					}
@@ -161,7 +161,7 @@ async function renderFrameworkComponent(
 			};
 		}
 	} else {
-		// Attempt: use explicitly passed renderer name
+		// Attempt: use explicitly passed renderer name for official renderers
 		if (metadata.hydrateArgs) {
 			const rendererName = rendererAliases.has(metadata.hydrateArgs)
 				? rendererAliases.get(metadata.hydrateArgs)
@@ -176,10 +176,18 @@ async function renderFrameworkComponent(
 		if (!renderer && validRenderers.length === 1) {
 			renderer = validRenderers[0];
 		}
-		// Attempt: can we guess the renderer from the export extension?
+		// Attempt: can we guess the official renderer from the export extension?
 		if (!renderer) {
 			const extname = metadata.componentUrl?.split('.').pop();
 			renderer = renderers.find(({ name }) => name === `@astrojs/${extname}` || name === extname);
+		}
+		// Attempt: use explicitly passed renderer name for custom renderers. This is put
+		// last to avoid potential conflicts with the previous implementations.
+		if (!renderer && metadata.hydrateArgs) {
+			const rendererName = metadata.hydrateArgs;
+			if (typeof rendererName === 'string') {
+				renderer = renderers.find(({ name }) => name === rendererName);
+			}
 		}
 	}
 
@@ -254,21 +262,13 @@ Please ensure that ${metadata.displayName}:
 1. Does not unconditionally access browser-specific globals like \`window\` or \`document\`.
    If this is unavoidable, use the \`client:only\` hydration directive.
 2. Does not conditionally return \`null\` or \`undefined\` when rendered on the server.
+3. If using multiple JSX frameworks at the same time (e.g. React + Preact), pass the correct \`include\`/\`exclude\` options to integrations.
 
 If you're still stuck, please open an issue on GitHub or join us at https://astro.build/chat.`);
 			}
 		}
 	} else {
 		if (metadata.hydrate === 'only') {
-			const rendererName = rendererAliases.has(metadata.hydrateArgs)
-				? rendererAliases.get(metadata.hydrateArgs)
-				: metadata.hydrateArgs;
-			if (!clientOnlyValues.has(rendererName)) {
-				// warning if provide incorrect client:only directive but find the renderer by guess
-				console.warn(
-					`The client:only directive for ${metadata.displayName} is not recognized. The renderer ${renderer.name} will be used. If you intended to use a different renderer, please provide a valid client:only directive.`,
-				);
-			}
 			html = await renderSlotToString(result, slots?.fallback);
 		} else {
 			const componentRenderStartTime = performance.now();
@@ -284,24 +284,6 @@ If you're still stuck, please open an issue on GitHub or join us at https://astr
 		}
 	}
 
-	// HACK! The lit renderer doesn't include a clientEntrypoint for custom elements, allow it
-	// to render here until we find a better way to recognize when a client entrypoint isn't required.
-	if (
-		renderer &&
-		!renderer.clientEntrypoint &&
-		renderer.name !== '@astrojs/lit' &&
-		metadata.hydrate
-	) {
-		throw new AstroError({
-			...AstroErrorData.NoClientEntrypoint,
-			message: AstroErrorData.NoClientEntrypoint.message(
-				displayName,
-				metadata.hydrate,
-				renderer.name,
-			),
-		});
-	}
-
 	// This is a custom element without a renderer. Because of that, render it
 	// as a string and the user is responsible for adding a script tag for the component definition.
 	if (!html && typeof Component === 'string') {
@@ -311,6 +293,8 @@ If you're still stuck, please open an issue on GitHub or join us at https://astr
 
 		const renderTemplateResult = renderTemplate`<${Tag}${internalSpreadAttributes(
 			props,
+			true,
+			Tag,
 		)}${markHTMLString(
 			childSlots === '' && voidElementNames.test(Tag) ? `/>` : `>${childSlots}</${Tag}>`,
 		)}`;
@@ -337,9 +321,11 @@ If you're still stuck, please open an issue on GitHub or join us at https://astr
 				if (isPage || renderer?.name === 'astro:jsx') {
 					destination.write(html);
 				} else if (html && html.length > 0) {
-					destination.write(
-						markHTMLString(removeStaticAstroSlot(html, renderer?.ssr?.supportsAstroStaticSlot)),
-					);
+					// Only renderer output can carry `<astro-static-slot>`; Astro's own markup never does.
+					const output = renderer
+						? removeStaticAstroSlot(html, renderer.ssr?.supportsAstroStaticSlot)
+						: html;
+					destination.write(markHTMLString(output));
 				}
 			},
 		};
@@ -371,7 +357,8 @@ If you're still stuck, please open an issue on GitHub or join us at https://astr
 						? 'astro-slot'
 						: 'astro-static-slot'
 					: 'astro-slot';
-				let expectedHTML = key === 'default' ? `<${tagName}>` : `<${tagName} name="${key}">`;
+				let expectedHTML =
+					key === 'default' ? `<${tagName}>` : `<${tagName} name="${escapeHTML(key)}">`;
 				if (!html.includes(expectedHTML)) {
 					unrenderedSlots.push(key);
 				}
@@ -385,7 +372,7 @@ If you're still stuck, please open an issue on GitHub or join us at https://astr
 			? unrenderedSlots
 					.map(
 						(key) =>
-							`<template data-astro-template${key !== 'default' ? `="${key}"` : ''}>${
+							`<template data-astro-template${key !== 'default' ? `="${escapeHTML(key)}"` : ''}>${
 								children[key]
 							}</template>`,
 					)
@@ -430,15 +417,17 @@ function sanitizeElementName(tag: string) {
 	return tag.trim().split(unsafe)[0].trim();
 }
 
-async function renderFragmentComponent(
-	result: SSRResult,
-	slots: ComponentSlots = {},
-): Promise<RenderInstance> {
-	const children = await renderSlotToString(result, slots?.default);
+function renderFragmentComponent(result: SSRResult, slots: ComponentSlots = {}): RenderInstance {
+	const slot = slots?.default;
+	// Eagerly evaluate the slot to trigger creation of nested component instances
+	// (and their propagator registration for head content like styles/scripts).
+	// Without this, propagating components (e.g. Content from render()) nested inside
+	// a Fragment named slot won't register before bufferHeadContent() runs.
+	const preRendered = slot?.(result);
 	return {
 		render(destination) {
-			if (children == null) return;
-			destination.write(children);
+			if (preRendered == null) return;
+			return renderChild(destination, preRendered);
 		},
 	};
 }
@@ -469,33 +458,33 @@ function renderAstroComponent(
 	slots: any = {},
 ): RenderInstance {
 	if (containsServerDirective(props)) {
-		return renderServerIsland(result, displayName, props, slots);
+		const serverIslandComponent = new ServerIslandComponent(result, props, slots, displayName);
+		result._metadata.propagators.add(serverIslandComponent);
+		return serverIslandComponent;
 	}
 
-	const instance = createAstroComponentInstance(result, displayName, Component, props, slots);
-	return {
-		async render(destination) {
-			// NOTE: This render call can't be pre-invoked outside of this function as it'll also initialize the slots
-			// recursively, which causes each Astro components in the tree to be called bottom-up, and is incorrect.
-			// The slots are initialized eagerly for head propagation.
-			await instance.render(destination);
-		},
-	};
+	return createAstroComponentInstance(result, displayName, Component, props, slots);
 }
 
-export async function renderComponent(
+export function renderComponent(
 	result: SSRResult,
 	displayName: string,
 	Component: unknown,
 	props: Record<string | number, any>,
 	slots: ComponentSlots = {},
-): Promise<RenderInstance> {
+): RenderInstance | Promise<RenderInstance> {
+	if (isAstroComponentFactory(Component)) {
+		return renderAstroComponent(result, displayName, Component, normalizeProps(props), slots);
+	}
+
 	if (isPromise(Component)) {
-		Component = await Component.catch(handleCancellation);
+		return Component.catch(handleCancellation).then((x) => {
+			return renderComponent(result, displayName, x, props, slots);
+		});
 	}
 
 	if (isFragmentComponent(Component)) {
-		return await renderFragmentComponent(result, slots).catch(handleCancellation);
+		return renderFragmentComponent(result, slots);
 	}
 
 	// Ensure directives (`class:list`) are processed
@@ -503,14 +492,10 @@ export async function renderComponent(
 
 	// .html components
 	if (isHTMLComponent(Component)) {
-		return await renderHTMLComponent(result, Component, props, slots).catch(handleCancellation);
+		return renderHTMLComponent(result, Component, props, slots).catch(handleCancellation);
 	}
 
-	if (isAstroComponentFactory(Component)) {
-		return renderAstroComponent(result, displayName, Component, props, slots);
-	}
-
-	return await renderFrameworkComponent(result, displayName, Component, props, slots).catch(
+	return renderFrameworkComponent(result, displayName, Component, props, slots).catch(
 		handleCancellation,
 	);
 
@@ -574,6 +559,13 @@ export async function renderComponentToString(
 		};
 
 		const renderInstance = await renderComponent(result, displayName, Component, props, slots);
+		if (containsServerDirective(props)) {
+			// This render may be one of the pending slot pre-renders (an island in a
+			// component slot in MDX), so awaiting them would wait on itself (#18156).
+			// The island's own slots are fully rendered by its `init()`, so their
+			// propagators are still collected.
+			await bufferPropagatedHead(result, { awaitPendingSlots: false });
+		}
 		await renderInstance.render(destination);
 	} catch (e) {
 		// We don't have a lot of information downstream, and upstream we can't catch the error properly

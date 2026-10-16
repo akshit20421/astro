@@ -1,19 +1,33 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import yaml from 'js-yaml';
-import type { AstroConfig, AstroSettings } from '../../@types/astro.js';
+import { parseYaml } from '@astrojs/internal-helpers/yaml';
+import * as toml from 'smol-toml';
 import { getContentPaths } from '../../content/index.js';
 import createPreferences from '../../preferences/index.js';
+import type { AstroSettings } from '../../types/astro.js';
+import type { AstroConfig, AstroInlineConfig } from '../../types/public/config.js';
 import { markdownContentEntryType } from '../../vite-plugin-markdown/content-entry-type.js';
 import { getDefaultClientDirectives } from '../client-directive/index.js';
-import { AstroError, AstroErrorData } from '../errors/index.js';
-import { formatYAMLException, isYAMLException } from '../errors/utils.js';
 import { SUPPORTED_MARKDOWN_FILE_EXTENSIONS } from './../constants.js';
+import { AstroError, AstroErrorData } from '../errors/index.js';
+import {
+	formatTOMLError,
+	formatYAMLParseError,
+	isTOMLError,
+	isYAMLParseError,
+} from '../errors/utils.js';
 import { AstroTimer } from './timer.js';
 import { loadTSConfig } from './tsconfig.js';
 
-export function createBaseSettings(config: AstroConfig): AstroSettings {
-	const { contentDir } = getContentPaths(config);
+export function createBaseSettings(
+	config: AstroConfig,
+	logLevel: AstroInlineConfig['logLevel'],
+): AstroSettings {
+	const { contentDir } = getContentPaths(
+		config,
+		undefined,
+		config.legacy?.collectionsBackwardsCompat,
+	);
 	const dotAstroDir = new URL('.astro/', config.root);
 	const preferences = createPreferences(config, dotAstroDir);
 	return {
@@ -22,10 +36,9 @@ export function createBaseSettings(config: AstroConfig): AstroSettings {
 		tsConfig: undefined,
 		tsConfigPath: undefined,
 		adapter: undefined,
+		prerenderer: undefined,
 		injectedRoutes: [],
 		resolvedInjectedRoutes: [],
-		serverIslandMap: new Map(),
-		serverIslandNameMap: new Map(),
 		pageExtensions: ['.astro', '.html', ...SUPPORTED_MARKDOWN_FILE_EXTENSIONS],
 		contentEntryTypes: [markdownContentEntryType],
 		dataEntryTypes: [
@@ -71,7 +84,7 @@ export function createBaseSettings(config: AstroConfig): AstroSettings {
 				extensions: ['.yaml', '.yml'],
 				getEntryInfo({ contents, fileUrl }) {
 					try {
-						const data = yaml.load(contents, { filename: fileURLToPath(fileUrl) });
+						const data = parseYaml(contents);
 						const rawData = contents;
 
 						return { data, rawData };
@@ -80,9 +93,41 @@ export function createBaseSettings(config: AstroConfig): AstroSettings {
 							fileURLToPath(contentDir),
 							fileURLToPath(fileUrl),
 						);
-						const formattedError = isYAMLException(e)
-							? formatYAMLException(e)
+						const formattedError = isYAMLParseError(e)
+							? formatYAMLParseError(e)
 							: new Error('contains invalid YAML.');
+
+						throw new AstroError({
+							...AstroErrorData.DataCollectionEntryParseError,
+							message: AstroErrorData.DataCollectionEntryParseError.message(
+								pathRelToContentDir,
+								formattedError.message,
+							),
+							stack: formattedError.stack,
+							location:
+								'loc' in formattedError
+									? { file: fileUrl.pathname, ...formattedError.loc }
+									: { file: fileUrl.pathname },
+						});
+					}
+				},
+			},
+			{
+				extensions: ['.toml'],
+				getEntryInfo({ contents, fileUrl }) {
+					try {
+						const data = toml.parse(contents);
+						const rawData = contents;
+
+						return { data, rawData };
+					} catch (e) {
+						const pathRelToContentDir = path.relative(
+							fileURLToPath(contentDir),
+							fileURLToPath(fileUrl),
+						);
+						const formattedError = isTOMLError(e)
+							? formatTOMLError(e)
+							: new Error('contains invalid TOML.');
 
 						throw new AstroError({
 							...AstroErrorData.DataCollectionEntryParseError,
@@ -110,22 +155,31 @@ export function createBaseSettings(config: AstroConfig): AstroSettings {
 		dotAstroDir,
 		latestAstroVersion: undefined, // Will be set later if applicable when the dev server starts
 		injectedTypes: [],
+		buildOutput: undefined,
+		injectedCsp: {
+			fontResources: new Set(),
+			styleHashes: [],
+		},
+		logLevel: logLevel ?? 'info',
+		fontsHttpServer: null,
 	};
 }
 
-export async function createSettings(config: AstroConfig, cwd?: string): Promise<AstroSettings> {
+export async function createSettings(
+	config: AstroConfig,
+	logLevel: AstroInlineConfig['logLevel'],
+	cwd?: string,
+): Promise<AstroSettings> {
 	const tsconfig = await loadTSConfig(cwd);
-	const settings = createBaseSettings(config);
+	const settings = createBaseSettings(config, logLevel);
 
 	let watchFiles = [];
 	if (cwd) {
 		watchFiles.push(fileURLToPath(new URL('./package.json', pathToFileURL(cwd))));
 	}
 
-	if (typeof tsconfig !== 'string') {
-		watchFiles.push(
-			...[tsconfig.tsconfigFile, ...(tsconfig.extended ?? []).map((e) => e.tsconfigFile)],
-		);
+	if (!tsconfig.error) {
+		watchFiles.push(...tsconfig.sources);
 		settings.tsConfig = tsconfig.tsconfig;
 		settings.tsConfigPath = tsconfig.tsconfigFile;
 	}

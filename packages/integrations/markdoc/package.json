@@ -1,14 +1,13 @@
 {
   "name": "@astrojs/markdoc",
   "description": "Add support for Markdoc in your Astro site",
-  "version": "0.11.5",
+  "version": "2.1.0",
   "type": "module",
-  "types": "./dist/index.d.ts",
   "author": "withastro",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/withastro/astro.git",
+    "url": "git+https://github.com/withastro/astro.git",
     "directory": "packages/integrations/markdoc"
   },
   "keywords": [
@@ -19,36 +18,14 @@
   "bugs": "https://github.com/withastro/astro/issues",
   "homepage": "https://docs.astro.build/en/guides/integrations-guide/markdoc/",
   "exports": {
-    "./prism": {
-      "types": "./dist/extensions/prism.d.ts",
-      "default": "./dist/extensions/prism.js"
-    },
-    "./shiki": {
-      "types": "./dist/extensions/shiki.d.ts",
-      "default": "./dist/extensions/shiki.js"
-    },
-    "./config": {
-      "types": "./dist/config.d.ts",
-      "default": "./dist/config.js"
-    },
+    "./prism": "./dist/extensions/prism.js",
+    "./shiki": "./dist/extensions/shiki.js",
+    "./config": "./dist/config.js",
     ".": "./dist/index.js",
     "./components": "./components/index.ts",
     "./runtime": "./dist/runtime.js",
     "./runtime-assets-config": "./dist/runtime-assets-config.js",
     "./package.json": "./package.json"
-  },
-  "typesVersions": {
-    "*": {
-      "config": [
-        "./dist/config.d.ts"
-      ],
-      "prism": [
-        "./dist/extensions/prism.d.ts"
-      ],
-      "shiki": [
-        "./dist/extensions/shiki.d.ts"
-      ]
-    }
   },
   "files": [
     "components",
@@ -56,34 +33,32 @@
     "template"
   ],
   "scripts": {
-    "build": "astro-scripts build \"src/**/*.ts\" && tsc",
+    "build": "astro-scripts build \"src/**/*.ts\" && tsc -b",
     "build:ci": "astro-scripts build \"src/**/*.ts\"",
     "dev": "astro-scripts dev \"src/**/*.ts\"",
-    "test": "astro-scripts test --timeout 60000 \"test/**/*.test.js\""
+    "test": "astro-scripts test --timeout 100000 \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@astrojs/internal-helpers": "workspace:*",
-    "@astrojs/markdown-remark": "workspace:*",
     "@astrojs/prism": "workspace:*",
-    "@markdoc/markdoc": "^0.4.0",
-    "esbuild": "^0.21.5",
+    "@markdoc/markdoc": "^0.5.10",
     "github-slugger": "^2.0.0",
-    "gray-matter": "^4.0.3",
-    "htmlparser2": "^9.1.0"
+    "htmlparser2": "^12.0.0",
+    "rolldown": "^1.2.13"
   },
   "peerDependencies": {
-    "astro": "^3.0.0 || ^4.0.0"
+    "astro": "^7.4.0"
   },
   "devDependencies": {
-    "@types/markdown-it": "^14.1.2",
+    "@types/markdown-it": "^14.2.0",
     "astro": "workspace:*",
     "astro-scripts": "workspace:*",
-    "devalue": "^5.1.1",
-    "linkedom": "^0.18.5",
-    "vite": "^5.4.9"
+    "devalue": "^6.0.2",
+    "linkedom": "^0.18.13",
+    "vite": "^8.3.4"
   },
   "engines": {
-    "node": "^18.17.1 || ^20.3.0 || >=21.0.0"
+    "node": ">=22.22.0"
   },
   "publishConfig": {
     "provenance": true
